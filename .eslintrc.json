@@ -1,0 +1,38 @@
+{
+  "extends": ["airbnb"],
+  "env": {
+    "browser": true,
+    "node": true
+  },
+  "rules": {
+    "no-console": "off",
+    "func-names": ["error", "never"],
+    "jsx-quotes": ["error", "prefer-single"],
+    "indent": [2, "tab", { "SwitchCase": 1, "VariableDeclarator": 1 }],
+    "no-tabs": 0,
+    "react/prop-types": 0,
+    "react/jsx-indent": [2, "tab"],
+    "react/jsx-indent-props": [2, "tab"],
+    "react/jsx-boolean-value": "error",
+    "react/jsx-curly-spacing": ["error", "never"],
+    "react/jsx-equals-spacing": ["error", "never"],
+    "react/jsx-no-duplicate-props": "error",
+    "react/jsx-no-undef": "error",
+    "react/jsx-tag-spacing": ["error", { "beforeSelfClosing": "always" }],
+    "react/jsx-uses-react": "error",
+    "react/jsx-uses-vars": "error",
+    "react/self-closing-comp": "error",
+    "react/jsx-filename-extension": [1, { "extensions": [".js", ".jsx"] }],
+    "import/no-unresolved": "off",
+    "import/first": "off",
+    "import/extensions": ["error", "ignorePackages", { "js": "never", "jsx": "never" }],
+    "comma-dangle": ["error", "never"],
+    "object-curly-newline": "off",
+    "jsx-a11y/anchor-is-valid": [ "error", {
+        "components": [ "Link" ],
+        "specialLink": [ "to", "hrefLeft", "hrefRight" ],
+        "aspects": [ "noHref", "invalidHref", "preferButton" ]
+    }],
+    "no-restricted-syntax": ["error", "ForInStatement", "LabeledStatement", "WithStatement"]
+  }
+}

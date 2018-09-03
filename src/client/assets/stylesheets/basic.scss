@@ -1,0 +1,127 @@
+*, *:before, *:after {
+	box-sizing: border-box;
+	user-select: none;
+}
+
+*:active, *:focus, *:visited {
+	outline: none;
+}
+
+body {
+	margin: 15px;
+	padding: 0;
+}
+
+div, span {
+	font-family: "Roboto", Arial, Helvetica, sans-serif;
+	font-size: 16px;
+	font-weight: 400;
+}
+
+input, button {
+	border: none; 
+	outline: none;
+}
+
+a {
+	color: $color-default-1;
+
+	&:hover {
+		color: $color-default-2;
+	}
+}
+
+.ablock {
+	position: absolute;
+}
+
+.iblock {
+	display: inline-block;
+	margin-right: 0;
+	margin-bottom: 0;
+	vertical-align: top;
+}
+
+.rblock {
+	position: relative;
+}
+
+.fblock {
+	position: fixed;
+}
+
+.cblock {
+	float: none;
+	margin: 0 auto;
+}
+
+.noselect {
+    user-select: none;
+}
+
+.de-sha {
+	box-shadow: 0 3px 5px -1px rgba(0,0,0,.2), 0 1px 18px 0 rgba(0,0,0,.2);
+}
+
+.de-sha2 {
+	box-shadow:0 3px 5px -2px rgba(0,0,0,.2), 0 1px 7px 0 rgba(0,0,0,.2);
+}
+
+.mb {
+	margin-bottom: 10px;
+}
+
+.mr {
+	margin-right: 10px;
+}
+
+.smoothEnter {
+	-webkit-animation: smooth_enter 0.5s linear 1;
+    animation: smooth_enter 0.5s linear 1;
+}
+
+@keyframes smooth_enter {
+	from {opacity: 0;}
+	to {opacity: 1;}
+}
+
+.slat {
+	transform: skewX(-30deg);
+	background-color: $color-default-1;
+}
+
+//== Font face
+//
+// # Open Sans
+
+@include font-face("Open Sans", "fonts/OpenSans-Regular");
+@include font-face("Open Sans", "fonts/OpenSans-Italic", null, italic);
+@include font-face("Open Sans", "fonts/OpenSans-Light", 300);
+@include font-face("Open Sans", "fonts/OpenSans-LightItalic", 300, italic);
+@include font-face("Open Sans", "fonts/OpenSans-SemiBold", 600);
+@include font-face("Open Sans", "fonts/OpenSans-SemiBoldItalic", 600, italic);
+@include font-face("Open Sans", "fonts/OpenSans-Bold", 700);
+@include font-face("Open Sans", "fonts/OpenSans-BoldItalic", 700, italic);
+@include font-face("Open Sans", "fonts/OpenSans-ExtraBold", 800);
+@include font-face("Open Sans", "fonts/OpenSans-ExtraBoldItalic", 800, italic);
+
+// # Roboto
+
+@include font-face("Roboto", "fonts/Roboto-Regular");
+@include font-face("Roboto", "fonts/Roboto-Italic", null, italic);
+@include font-face("Roboto", "fonts/Roboto-Thin", 100);
+@include font-face("Roboto", "fonts/Roboto-ThinItalic", 100, italic);
+@include font-face("Roboto", "fonts/Roboto-Light", 300);
+@include font-face("Roboto", "fonts/Roboto-LightItalic", 300, italic);
+@include font-face("Roboto", "fonts/Roboto-Medium", 500);
+@include font-face("Roboto", "fonts/Roboto-MediumItalic", 500, italic);
+@include font-face("Roboto", "fonts/Roboto-Bold", 700);
+@include font-face("Roboto", "fonts/Roboto-BoldItalic", 700, italic);
+@include font-face("Roboto", "fonts/Roboto-Black", 900);
+@include font-face("Roboto", "fonts/Roboto-BlackItalic", 900, italic);
+
+//== Grid
+//
+// # Absolute grid that does not respond to screen size
+
+@include generate-absolute-grid();

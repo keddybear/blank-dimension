@@ -1,0 +1,169 @@
+%centered {
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.login-ops {
+	max-width: 400px;
+	@extend %centered;
+	margin-bottom: 20px;
+
+	%btn-base {
+		position: relative;
+		text-align: center;
+		padding: 10px;
+		width: 100%;
+		margin-bottom: 15px;
+
+		&:before, &:after {
+			position: absolute;
+			content: "";
+			height: 4px;
+			bottom: -12px;
+			background-color: $color-default-1;
+			transition: width 0.3s;
+		}
+
+		&:before {
+			right: 50%;
+		}
+
+		&:after {
+			left: 50%;
+		}
+	}
+
+	.de-btn {
+		@extend %btn-base;
+		background-color: rgba($color-default-1, 0.7);
+		color: white;
+		cursor: pointer;
+
+		&:before, &:after {
+			width: 0%;
+		}
+
+		&:hover {
+			background-color: $color-default-1;
+		}
+	}
+
+	.de-btn-active {
+		@extend %btn-base;
+		background-color: $color-default-1;
+		color: white;
+
+		&:before, &:after {
+			width: 50%;
+		}
+	}
+}
+
+.login-ui {
+	position: relative;
+	max-width: 320px;
+	padding: 20px 0;
+	color: #777;
+	@extend %centered;
+
+	.input-box {
+		position: relative;
+		width: 100%;
+		padding: 10px 10px 5px 10px;
+		margin-bottom: 30px;
+	    border-bottom: 2px solid $color-default-1;
+	    transition: box-shadow 0.2s, border 0.2s;
+
+	    &.active {
+	    	box-shadow: $shadow-default-light;
+	    }
+
+	    &.warn {
+	    	border-bottom-color: $color-warn;
+	    	border-bottom-width: 32px;
+	    }
+
+		.input-label {
+			background-size: 28px 28px;
+			background-repeat: no-repeat;
+			width: 32px;
+			height: 32px;
+
+			&.account {
+				@include image-url("account.svg");
+			}
+
+			&.lock {
+				@include image-url("lock.svg");
+			}
+
+			&.email {
+				@include image-url("email.svg");
+			}
+		}
+
+		input {
+			width: calc(100% - 32px);
+			padding-left: 10px;
+			height: 32px;
+			color: #777;
+		}
+
+		.msg {
+			position: absolute;
+			color: white;
+			bottom: -26px;
+			font-size: 14px;
+		}
+	}
+
+	.check-box {
+		position: relative;
+		width: 100%;
+		padding: 0 0 10px 16px;
+		border-bottom: 0px solid transparent;
+		margin-bottom: 20px;
+		transition: border 0.2s;
+
+		&.warn {
+	    	border-bottom-color: $color-warn;
+	    	border-bottom-width: 32px;
+	    }
+
+		.msg {
+			position: absolute;
+			color: white;
+			bottom: -26px;
+			left: 10px;
+			font-size: 14px;
+		}
+	}
+
+	button.btn {
+		position: relative;
+		background-color: $color-default-1;
+		color: white;
+		width: 100%;
+		padding: 8px;
+		margin-bottom: 20px;
+
+		&:disabled {
+			background-color: #ababab;
+		}
+	}
+
+	div.forgotpass {
+		text-align: center;
+
+		span {
+			color: $color-default-1;
+			font-size: 14px;
+			font-style: italic;
+
+			&:hover {
+				cursor: pointer;
+				text-decoration: underline;
+			}
+		}
+	}
+}

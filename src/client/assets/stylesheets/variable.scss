@@ -1,0 +1,28 @@
+//== General
+
+$hostname:					"http://localhost/" !default;
+
+//== Colors
+
+$color-sea: 				#00aaf0 !default;
+$color-warn:				#f44336 !default;
+$color-default-1:			#9290ff !default;
+$color-default-2:			#6464be !default; // default-2 complements default-1
+
+//== Shadow
+
+$shadow-default-light:		0 3px 5px -2px rgba(0,0,0,.2), 0 1px 7px 0 rgba(0,0,0,.2) !default;
+$shadow-default-dark:		0 3px 5px -1px rgba(0,0,0,.2), 0 1px 18px 0 rgba(0,0,0,.2) !default;
+
+//== Border
+
+$border-radius-default:		5px !default;
+
+//== Grid system
+//
+//## Define your custom responsive grid.
+
+//** Number of columns in the grid.
+$grid-columns:              12 !default;
+//** Padding between columns. Gets divided in half for the left and right.
+$grid-gutter-width:         30px !default;

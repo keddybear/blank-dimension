@@ -1,0 +1,88 @@
+// =============================================================================
+// String Replace
+// =============================================================================
+
+@function str-replace($string, $search, $replace: "") {
+	$index: str-index($string, $search);
+
+	@if $index {
+		@return str-slice($string, 1, $index - 1) + $replace + str-replace(str-slice($string, $index + str-length($search)), $search, $replace);
+	}
+
+	@return $string;
+}
+
+// =============================================================================
+// Font Face
+// =============================================================================
+
+@mixin font-face($name, $path, $weight: null, $style: null, $exts: ttf) { // $exts: eot woff2 woff ttf svg
+	$src: null;
+
+	$extmods: (
+		eot: "?",
+		svg: "#" + str-replace($name, " ", "_")
+	);
+
+	$formats: (
+		otf: "opentype",
+		ttf: "truetype"
+	);
+
+	@each $ext in $exts {
+		$extmod: if(map-has-key($extmods, $ext), $ext + map-get($extmods, $ext), $ext);
+		$format: if(map-has-key($formats, $ext), map-get($formats, $ext), $ext);
+		$src: append($src, url(quote($path + "." + $extmod)) format(quote($format)), comma);
+	}
+
+	@font-face {
+		font-family: quote($name);
+		font-style: $style;
+		font-weight: $weight;
+		src: $src;
+	}
+}
+
+// =============================================================================
+// Grid Generator
+// =============================================================================
+
+@mixin make-absolute-columns() {
+	$list: ".col-abs-1";
+	@for $i from 2 through $grid-columns {
+		$list: "#{$list}, .col-abs-#{$i}";
+	}
+	#{$list} {
+		position: relative;
+		display: inline-block;
+		margin: 0;
+		vertical-align: top;
+		// Prevent columns from collapsing when empty
+		min-height: 1px;
+		// Inner gutter via padding
+		padding-left:  ceil(($grid-gutter-width / 2));
+		padding-right: floor(($grid-gutter-width / 2));
+	}
+}
+
+@mixin calc-grid-width() {
+	@for $i from 1 through $grid-columns {
+		.col-abs-#{$i} {
+			width: percentage(($i / $grid-columns));
+		}
+	}
+}
+
+@mixin generate-absolute-grid() {
+	@include make-absolute-columns();
+	@include calc-grid-width();
+}
+
+
+// =============================================================================
+// Image
+// =============================================================================
+
+@mixin image-url($image) {
+	background-image: url(quote("../images/" + $image));
+}
