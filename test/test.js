@@ -6,7 +6,7 @@ const request 		= require('supertest');
 const create 		= require('../src/server/create');
 // const db 			= require('./db/connect');
 
-const appName = 'MERN-STARTER-KIT';
+const appName = 'BLANK-DIMENSION';
 const port = process.env.PORT || 8080;
 
 describe(appName, function() {

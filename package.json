@@ -1,5 +1,5 @@
 {
-  "name": "mern-starter-kit",
+  "name": "blank-dimension",
   "version": "1.0.0",
   "description": "A personal React project to turn my science fiction into a web app.",
   "main": "src/server/index.js",
