@@ -5,12 +5,32 @@ const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const CompressionPlugin = require('compression-webpack-plugin');
 
 const outputDir = 'dist';
+const webpackPlugins = [
+	new CleanWebpackPlugin([outputDir]),
+	new HtmlWebpackPlugin({
+		template: './public/index.html',
+		favicon: './public/favicon.ico'
+	})
+];
+if (process.env.NODE_ENV === 'production') {
+	webpackPlugins.push(new UglifyJsPlugin({
+		exclude: [/\.min\.js$/gi]
+	}));
+}
+webpackPlugins.push(new CompressionPlugin({
+	asset: '[path].gz[query]',
+	algorithm: 'gzip',
+	test: /\.js$|\.css$|\.html$/,
+	threshold: 10240,
+	minRatio: 0.8
+}));
 
 module.exports = {
 	entry: ['babel-polyfill', './src/client/index.js'],
 	output: {
 		path: path.join(__dirname, outputDir),
-		filename: 'bundle.js'
+		filename: '[name].bundle.js',
+		chunkFilename: '[name].bundle.js'
 	},
 	module: {
 		rules: [
@@ -54,21 +74,5 @@ module.exports = {
 			'/api': 'http://localhost:8080'
 		}
 	},
-	plugins: [
-		new CleanWebpackPlugin([outputDir]),
-		new HtmlWebpackPlugin({
-			template: './public/index.html',
-			favicon: './public/favicon.ico'
-		}),
-		new UglifyJsPlugin({
-			exclude: [/\.min\.js$/gi]
-		}),
-		new CompressionPlugin({
-			asset: '[path].gz[query]',
-			algorithm: 'gzip',
-			test: /\.js$|\.css$|\.html$/,
-			threshold: 10240,
-			minRatio: 0.8
-		})
-	]
+	plugins: webpackPlugins
 };

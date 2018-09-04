@@ -4,6 +4,11 @@
     "browser": true,
     "node": true
   },
+  "parser": "babel-eslint",
+  "parserOptions": {
+    "sourceType": "module",
+    "allowImportExportEverywhere": true
+  },
   "rules": {
     "no-console": "off",
     "func-names": ["error", "never"],
