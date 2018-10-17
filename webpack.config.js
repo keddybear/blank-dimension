@@ -63,7 +63,8 @@ module.exports = {
 			actions: path.resolve(__dirname, 'src/client/actions/'),
 			components: path.resolve(__dirname, 'src/client/components/'),
 			reducers: path.resolve(__dirname, 'src/client/reducers/'),
-			server: path.resolve(__dirname, 'src/server/')
+			server: path.resolve(__dirname, 'src/server/'),
+			custom: path.resolve(__dirname, 'custom/')
 		}
 	},
 	devServer: {
