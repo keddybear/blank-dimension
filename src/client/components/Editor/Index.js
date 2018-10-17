@@ -1,35 +1,62 @@
 import React, { Component } from 'react';
+import { Editor } from 'custom/slate-react';
+import { Value } from 'custom/slate';
 
-import Editor, { Editable, createEmptyState } from 'ory-editor-core';
-import 'ory-editor-core/lib/index.css';
-
-import { Trash, DisplayModeToggle, Toolbar } from 'ory-editor-ui';
-import 'ory-editor-ui/lib/index.css';
-
-const content = createEmptyState();
-
-const editor = new Editor({
-	editables: [content]
+const initialValue = Value.fromJSON({
+	document: {
+		nodes: [{
+			object: 'block',
+			type: 'paragraph',
+			nodes: [{
+				object: 'text',
+				leaves: [{
+					text: 'My first paragraph!'
+				}]
+			}]
+		}]
+	}
 });
 
-class App extends Component {
-	componentWillMount() {
+class TextEditor extends Component {
+	constructor(props) {
+		super(props);
+		this.state = {
+			value: initialValue
+		};
+		this.onChange = ({ value }) => {
+			console.log(value);
+			this.setState({ value });
+		};
+		this.onKeyDown = (e, change) => {
+			if (!e.ctrlKey) return;
+			e.preventDefault();
 
+			switch (e.key) {
+				case 'b':
+					change.addMark('bold');
+					break;
+				default:
+					console.log('switch.default', e.key);
+			}
+		};
 	}
 
 	render() {
 		return (
-			<div>
-				<div className='App-header'>
-					<h2>Welcome to React</h2>
-				</div>
-				<Editable editor={editor} id={content.id} />
-				<Trash editor={editor} />
-				<DisplayModeToggle editor={editor} />
-				<Toolbar editor={editor} />
+			<div
+				style={{
+					maxWidth: '600px',
+					margin: 'auto'
+				}}
+			>
+				<Editor
+					value={this.state.value}
+					onChange={this.onChange}
+					onKeyDown={this.onKeyDown}
+				/>
 			</div>
 		);
 	}
 }
 
-export default App;
+export default TextEditor;

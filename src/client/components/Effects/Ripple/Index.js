@@ -1,6 +1,6 @@
 import React from 'react';
 // import { TweenMax } from 'gsap/TweenMax';
-import './style.scss';
+import './styles.scss';
 
 export default class Ripple extends React.Component {
 	constructor(props) {

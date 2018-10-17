@@ -9,7 +9,8 @@ import Welcome from './Welcome';
 import ErrorConsole from './ErrorConsole';
 import TOS from './TOS';
 import NoMatch from './404';
-import Editor from 'components/Editor/Dynamic';
+// import Editor from 'components/Editor/Dynamic';
+// import BlankEditor from 'custom/blank/editor';
 
 import 'vendors/bootstrap-sass-3.3.7/stylesheets/bootstrap-custom.scss';
 import 'assets/stylesheets/main.scss';
@@ -88,7 +89,7 @@ class App extends Component {
 						{/* renderRoute({ path: '/', exact: true }, Login) */}
 						{/* renderRoute({ path: '/welcome' }, Welcome) */}
 						{/* renderRoute({ path: '/terms' }, TOS) */}
-						{renderRoute({ path: '/', exact: true }, Editor)}
+						{/* renderRoute({ path: '/', exact: true }, BlankEditor) */}
 						<Route component={NoMatch} />
 					</Switch>
 				</BrowserRouter>
