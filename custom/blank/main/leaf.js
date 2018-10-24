@@ -184,3 +184,33 @@ export class LeafChain {
 		this.nextLeaf = this.endLeaf.nextLeaf;
 	}
 }
+
+export class LeafText {
+	/*
+		LeafText is used to store text change in a Leaf for history undo() and redo().
+	*/
+
+	/*
+		@ attributes
+		leaf: Leaf object - default: null
+		range: Array<number> - default: []
+		text: String - default: ''
+	*/
+	leaf: Leaf | null;
+	range: Array<number>;
+	text: string;
+
+	/*
+		constructor
+		@ params
+			props: Object - default {}
+				- leaf: Leaf object
+				- range: Array<number>
+				- text: String
+	*/
+	constructor(props: Object = {}) {
+		this.leaf = props.leaf || null;
+		this.range = props.range || [];
+		this.text = props.text || '';
+	}
+}

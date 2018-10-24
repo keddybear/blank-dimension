@@ -14,7 +14,7 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "flow": "flow",
     "blank-test": "mocha --require babel-core/register --require babel-polyfill custom/blank/main/test.js",
-    "chain-test": "mocha --require babel-core/register --require babel-polyfill custom/blank/leaf/chain.js"
+    "core-test": "mocha --require babel-core/register --require babel-polyfill custom/blank/main/test"
   },
   "author": "Dikai Xiong",
   "license": "None",
