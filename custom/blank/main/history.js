@@ -113,17 +113,20 @@ class BlankHistory {
 		push:
 			- Push a BlankHistoryStep into either past or future stack, depending
 			  on its past value.
-			- Return the new length value
+			- Clear future stack if not redo().
+			- Do nothing if step is empty. (readyHistoryStep() does the same thing.)
 		@ params
 			step: BlankHistoryStep
-		@ return
-			len: number
+			redo: Boolean - default: false
 	*/
-	push(step: BlankHistoryStep): number {
+	push(step: BlankHistoryStep, redo: boolean = false): void {
+		if (step.stack.length === 0) return;
 		if (step.past) {
-			return this.stackPast.push(step);
+			if (!redo) this.stackFuture.length = 0;
+			this.stackPast.push(step);
+		} else {
+			this.stackFuture.push(step);
 		}
-		return this.stackFuture.push(step);
 	}
 
 	/*
