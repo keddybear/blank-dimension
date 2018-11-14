@@ -9,21 +9,20 @@ import {
 	isZeroLeaf,
 	trimRange,
 	destroyLeaf,
-	unchain,
+	unchainLeaf,
 	_PAST_STACK_,
 	_FUTURE_STACK_,
 	TempHistoryPastStep,
 	TempHistoryFutureStep,
-	chained,
+	chainedLeaf,
 	_NOT_CHAINED_,
 	_CHAINED_AFTER_,
 	_CHAINED_BEFORE_,
-	chain,
+	chainLeaf,
 	_CHAIN_AFTER_,
 	_CHAIN_BEFORE_,
-	chainBetween,
-	chainBetweenDangerous,
-	rechain,
+	chainLeafChainBetween,
+	rechainLeaf,
 	consume,
 	_TRAVERSE_UP_,
 	_TRAVERSE_DOWN_,
@@ -249,17 +248,17 @@ describe('Leaf chaining & advanced operations', function() {
 		l3.prevLeaf = l2;
 
 		it('l1 & l3: not chained', function(done) {
-			let result = chained(l1, l3);
+			let result = chainedLeaf(l1, l3);
 			expect(result).to.equal(_NOT_CHAINED_);
 
 			done();
 		});
 
 		it('l1 & l2: chained', function(done) {
-			let result = chained(l1, l2);
+			let result = chainedLeaf(l1, l2);
 			expect(result).to.equal(_CHAINED_BEFORE_);
 
-			result = chained(l2, l1);
+			result = chainedLeaf(l2, l1);
 			expect(result).to.equal(_CHAINED_AFTER_);
 
 			done();
@@ -267,7 +266,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 	});
 
-	describe.skip('chain', function() {
+	describe.skip('chainLeaf', function() {
 		let l1 = new Leaf({
 			text: 'Hello, World!'
 		});
@@ -287,9 +286,9 @@ describe('Leaf chaining & advanced operations', function() {
 		l4.new = false;
 
 		it('chain l2 after l1', function(done) {
-			chain(l2, l1, _CHAIN_AFTER_);
+			chainLeaf(l2, l1);
 
-			let result = chained(l1, l2);
+			let result = chainedLeaf(l1, l2);
 			expect(result).to.equal(_CHAINED_BEFORE_);
 
 			result = l1.prevLeaf === null;
@@ -307,24 +306,10 @@ describe('Leaf chaining & advanced operations', function() {
 			done();
 		});
 
-		it('Throw Error: chain l2 before l3 - circular chain warning', function(done) {
-			let e;
-			try {
-				chain(l2, l3, _CHAIN_BEFORE_);
-			} catch (error) {
-				e = error;
-			} finally {
-				let result = e instanceof Error;
-				expect(result).to.be.true;
-				console.log(e.message);
-				done();
-			}
-		});
-
 		it('chain l3 after l2', function(done) {
-			chain(l3, l2, _CHAIN_AFTER_);
+			chainLeaf(l3, l2);
 
-			let result = chained(l2, l3);
+			let result = chainedLeaf(l2, l3);
 			expect(result).to.equal(_CHAINED_BEFORE_);
 
 			result = l2.prevLeaf === l1;
@@ -345,7 +330,7 @@ describe('Leaf chaining & advanced operations', function() {
 		it('Throw Error: chain l3 after l1', function(done) {
 			let e;
 			try {
-				chain(l3, l1, _CHAIN_AFTER_);
+				chainLeaf(l3, l1);
 			} catch (error) {
 				e = error;
 			} finally {
@@ -359,7 +344,7 @@ describe('Leaf chaining & advanced operations', function() {
 		it('Throw Error: chain l2 after l3', function(done) {
 			let e;
 			try {
-				chain(l2, l3, _CHAIN_AFTER_);
+				chainLeaf(l2, l3);
 			} catch (error) {
 				e = error;
 			} finally {
@@ -373,7 +358,7 @@ describe('Leaf chaining & advanced operations', function() {
 		it('Throw Error: chain l1 after l3', function(done) {
 			let e;
 			try {
-				chain(l1, l3, _CHAIN_AFTER_);
+				chainLeaf(l1, l3);
 			} catch (error) {
 				e = error;
 			} finally {
@@ -386,7 +371,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 	});
 
-	describe.skip('chainBetween', function() {
+	describe.skip('chainLeafChainBetween', function() {
 		let l1 = new Leaf({
 			text: 'Hello, World!'
 		});
@@ -413,13 +398,13 @@ describe('Leaf chaining & advanced operations', function() {
 			History.clear(_PAST_STACK_);
 			History.clear(_FUTURE_STACK_);
 
-			chain(l2, l1, _CHAIN_AFTER_);
+			chainLeaf(l2, l1);
 			l1.new = false;
 			l2.new = false;
 
 			printLeafChain(l1); console.log(' ');
 
-			chainBetween(l3, l3, l1, l2);
+			chainLeafChainBetween(l3, l3, l1, l2);
 			
 			expect(l1.prevLeaf).to.equal(null);
 			expect(l1.nextLeaf).to.equal(l3);
@@ -448,9 +433,9 @@ describe('Leaf chaining & advanced operations', function() {
 			History.clear(_PAST_STACK_);
 			History.clear(_FUTURE_STACK_);
 			
-			chain(l5, l4, _CHAIN_AFTER_);
+			chainLeaf(l5, l4);
 
-			chainBetween(l4, l5, l3, l1);
+			chainLeafChainBetween(l4, l5, l3, l1);
 
 			expect(l1.nextLeaf).to.equal(l4);
 			expect(l4.prevLeaf).to.equal(l1);
@@ -502,7 +487,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 			l2.new = false;
 
-			chain(l1, l2, _CHAIN_AFTER_);
+			chainLeaf(l1, l2);
 
 			const pastStep = TempHistoryPastStep.stack;
 
@@ -523,10 +508,10 @@ describe('Leaf chaining & advanced operations', function() {
 		it('Chain l3-l4-l5 (new) after l2: unchain l1', function(done) {
 			l1.new = false;
 
-			chain(l4, l3, _CHAIN_AFTER_);
-			chain(l5, l4, _CHAIN_AFTER_);
+			chainLeaf(l4, l3);
+			chainLeaf(l5, l4);
 
-			chain(l3, l2, _CHAIN_AFTER_);
+			chainLeaf(l3, l2);
 
 			const pastStep = TempHistoryPastStep.stack;
 
@@ -581,7 +566,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 	});
 
-	describe('rechain - chainBetween, LeafChain, redo, undo', function() {
+	describe('rechainLeaf - chainLeafChainBetween, LeafChain, redo, undo', function() {
 		let start = new Leaf({
 			text: 'start '
 		});
@@ -600,13 +585,13 @@ describe('Leaf chaining & advanced operations', function() {
 			History.clear(_PAST_STACK_);
 			History.clear(_FUTURE_STACK_);
 
-			chain(end, start, _CHAIN_AFTER_);
+			chainLeaf(end, start);
 			// Do not replace start or end
 			start.new = false;
 			end.new = false;
 
 			// Insert
-			chainBetween(l1, l1, start, end);
+			chainLeafChainBetween(l1, l1, start, end);
 			// start-l1-end
 			expect(start.nextLeaf).to.equal(l1);
 			expect(end.prevLeaf).to.equal(l1);
@@ -673,14 +658,14 @@ describe('Leaf chaining & advanced operations', function() {
 		});
 
 		it('Replace l1 with l2-l3, undo, redo', function(done) {
-			chain(l3, l2, _CHAIN_AFTER_);
+			chainLeaf(l3, l2);
 
-			// Replace l1 (Do not use chainBetweenDangerous)
+			// Replace l1
 			start.nextLeaf = l2;
 			l2.prevLeaf = start;
 			end.prevLeaf = l3;
 			l3.nextLeaf = end;
-			unchain(l1, _PAST_STACK_);
+			unchainLeaf(l1, _PAST_STACK_);
 			// start-l2-l3-end
 			expect(start.nextLeaf).to.equal(l2);
 			expect(end.prevLeaf).to.equal(l3);
@@ -767,10 +752,10 @@ describe('Leaf chaining & advanced operations', function() {
 				})
 			});
 
-			chain(l2, l1, _CHAIN_AFTER_);
+			chainLeaf(l2, l1);
 			l1.new = false;
 
-			let result = consume(l2, _TRAVERSE_UP_);
+			let result = consume(l2);
 			expect(result).to.be.true;
 			expect(l2.text).to.equal('l1l2');
 			expect(l2.styles.bold).to.be.true;
@@ -799,10 +784,10 @@ describe('Leaf chaining & advanced operations', function() {
 				})
 			});
 
-			chain(l2, l1, _CHAIN_AFTER_);
+			chainLeaf(l2, l1);
 			l1.new = false;
 
-			let result = consume(l2, _TRAVERSE_UP_);
+			let result = consume(l2);
 			expect(result).to.be.false;
 			expect(l2.text).to.equal('l2');
 			expect(l2.styles.bold).to.be.false;
@@ -825,10 +810,10 @@ describe('Leaf chaining & advanced operations', function() {
 
 			let l2 = new Leaf();
 
-			chain(l2, l1, _CHAIN_AFTER_);
+			chainLeaf(l2, l1);
 			l1.new = false;
 
-			let result = consume(l2, _TRAVERSE_UP_);
+			let result = consume(l2);
 			expect(result).to.be.true;
 			expect(l2.text).to.equal('l1');
 			expect(l2.styles.bold).to.be.true;
@@ -851,7 +836,7 @@ describe('Leaf chaining & advanced operations', function() {
 				text: 'l2'
 			});
 
-			chain(l2, l1, _CHAIN_AFTER_);
+			chainLeaf(l2, l1);
 			l2.new = false;
 
 			let result = consume(l1, _TRAVERSE_DOWN_);
@@ -880,7 +865,7 @@ describe('Leaf chaining & advanced operations', function() {
 				})
 			});
 
-			chain(l2, l1, _CHAIN_AFTER_);
+			chainLeaf(l2, l1);
 			l2.new = false;
 
 			let result = consume(l1, _TRAVERSE_DOWN_);
@@ -901,7 +886,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 			let l2 = new Leaf();
 
-			chain(l2, l1, _CHAIN_AFTER_);
+			chainLeaf(l2, l1);
 			l2.new = false;
 
 			let result = consume(l1, _TRAVERSE_DOWN_);
@@ -952,10 +937,10 @@ describe('Leaf chaining & advanced operations', function() {
 			});
 			
 			// Create a chain
-			chain(l1, start, _CHAIN_AFTER_);
-			chain(l2, l1, _CHAIN_AFTER_);
-			chain(l3, l2, _CHAIN_AFTER_);
-			chain(end, l3, _CHAIN_AFTER_);
+			chainLeaf(l1, start);
+			chainLeaf(l2, l1);
+			chainLeaf(l3, l2);
+			chainLeaf(end, l3);
 			start.new = false;
 			l1.new = false;
 			l2.new = false;
@@ -967,7 +952,7 @@ describe('Leaf chaining & advanced operations', function() {
 			let z = new Leaf();
 
 			// Replace l2 with zero Leaf
-			chainBetweenDangerous(z, z, l1, l3);
+			chainLeafChainBetween(z, z, l1, l3);
 			expect(l1.nextLeaf).to.equal(z);
 			expect(z.prevLeaf).to.equal(l1);
 			expect(z.nextLeaf).to.equal(l3);
@@ -985,9 +970,9 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(lc.nextLeaf).to.equal(l3);
 
 			// Consume all
-			result = consume(z, _TRAVERSE_UP_);
+			result = consume(z);
 			expect(result).to.be.true;
-			result = consume(z, _TRAVERSE_UP_);
+			result = consume(z);
 			expect(result).to.be.false;
 			result = consume(z, _TRAVERSE_DOWN_);
 			expect(result).to.be.true;
@@ -1058,10 +1043,10 @@ describe('Leaf chaining & advanced operations', function() {
 			});
 
 			// Create a chain
-			chain(l1, start, _CHAIN_AFTER_);
-			chain(l2, l1, _CHAIN_AFTER_);
-			chain(l3, l2, _CHAIN_AFTER_);
-			chain(end, l3, _CHAIN_AFTER_);
+			chainLeaf(l1, start);
+			chainLeaf(l2, l1);
+			chainLeaf(l3, l2);
+			chainLeaf(end, l3);
 			start.new = false;
 			l1.new = false;
 			l3.new = false;
@@ -1069,7 +1054,7 @@ describe('Leaf chaining & advanced operations', function() {
 			printLeafChain(start); console.log(' ');
 
 			// autoMergeLeaf on l2
-			autoMergeLeaf(l2, _TRAVERSE_UP_);
+			autoMergeLeaf(l2);
 			printLeafChain(start); console.log(' ');
 
 			expect(start.nextLeaf).to.equal(l2);
@@ -1236,8 +1221,8 @@ describe('Leaf chaining & advanced operations', function() {
 					text: 'three Leaves'
 				});
 
-				chain(l2, l1, _CHAIN_AFTER_);
-				chain(l3, l2, _CHAIN_AFTER_);
+				chainLeaf(l2, l1);
+				chainLeaf(l3, l2);
 
 				l1.new = false;
 				l2.new = false;
@@ -1317,10 +1302,10 @@ describe('Leaf chaining & advanced operations', function() {
 					})
 				})
 				
-				chain(l1, start, _CHAIN_AFTER_);
-				chain(l2, l1, _CHAIN_AFTER_);
-				chain(l3, l2, _CHAIN_AFTER_);
-				chain(end, l3, _CHAIN_AFTER_);
+				chainLeaf(l1, start);
+				chainLeaf(l2, l1);
+				chainLeaf(l3, l2);
+				chainLeaf(end, l3);
 				
 				start.new = false;
 				l1.new = false;

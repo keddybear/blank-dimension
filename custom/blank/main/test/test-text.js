@@ -11,17 +11,16 @@ import {
 	_NOT_CHAINED_,
 	_CHAINED_AFTER_,
 	_CHAINED_BEFORE_,
-	chain,
+	chainLeaf,
 	_CHAIN_AFTER_,
 	_CHAIN_BEFORE_,
-	chainBetween,
-	chainBetweenDangerous,
-	rechain,
+	chainLeafChainBetween,
+	rechainLeaf,
 	consume,
 	_TRAVERSE_UP_,
 	_TRAVERSE_DOWN_,
 	applyLeafStyle,
-	applyStyle,
+	applyLeavesStyle,
 	DirtyNewLeaves,
 	autoMergeLeaf,
 	readyHistoryStep,
@@ -69,8 +68,8 @@ describe('Leaf - Apply Text', function() {
 				})
 			});
 
-			chain(l1, start, _CHAIN_AFTER_);
-			chain(end, l1, _CHAIN_AFTER_);
+			chainLeaf(l1, start);
+			chainLeaf(end, l1);
 
 			start.new = false;
 			l1.new = false;
@@ -140,10 +139,10 @@ describe('Leaf - Apply Text', function() {
 				})
 			});
 
-			chain(l1, start, _CHAIN_AFTER_);
-			chain(l2, l1, _CHAIN_AFTER_);
-			chain(l3, l2, _CHAIN_AFTER_);
-			chain(end, l3, _CHAIN_AFTER_);
+			chainLeaf(l1, start);
+			chainLeaf(l2, l1);
+			chainLeaf(l3, l2);
+			chainLeaf(end, l3);
 
 			start.new = false;
 			end.new = false;
@@ -162,7 +161,7 @@ describe('Leaf - Apply Text', function() {
 			while (DirtyNewLeaves.length > 0) {
 				const dirtyLeaf = DirtyNewLeaves.pop();
 				if (!dirtyLeaf.consumed) {
-					autoMergeLeaf(dirtyLeaf, _TRAVERSE_UP_);
+					autoMergeLeaf(dirtyLeaf);
 					called += 1;
 				}
 				delete dirtyLeaf.consumed;
@@ -173,8 +172,8 @@ describe('Leaf - Apply Text', function() {
 			printLeafChain(start); console.log(' ');
 
 			// Show what happens if consumed Leaves are not skipped.
-			autoMergeLeaf(l2, _TRAVERSE_UP_);
-			autoMergeLeaf(l1, _TRAVERSE_UP_);
+			autoMergeLeaf(l2);
+			autoMergeLeaf(l1);
 			printLeafChain(start); console.log(' ');
 
 			done();
@@ -574,8 +573,8 @@ describe('Leaf - Apply Text', function() {
 			});
 
 			it('Delete a Leaf between start and end', function(done) {
-				chain(l1, start, _CHAIN_AFTER_);
-				chain(end, l1, _CHAIN_AFTER_);
+				chainLeaf(l1, start);
+				chainLeaf(end, l1);
 				start.new = false;
 				end.new = false;
 				l1.new = false;
@@ -720,10 +719,10 @@ describe('Leaf - Apply Text', function() {
 		});
 		
 		it('[Hi ]B-[darkness, my]-[ old friend.]B - delete \'dark\'', function(done) {
-			chain(l1, start, _CHAIN_AFTER_);
-			chain(l2, l1, _CHAIN_AFTER_);
-			chain(l3, l2, _CHAIN_AFTER_);
-			chain(end, l3, _CHAIN_AFTER_);
+			chainLeaf(l1, start);
+			chainLeaf(l2, l1);
+			chainLeaf(l3, l2);
+			chainLeaf(end, l3);
 			start.new = false;
 			l1.new = false;
 			l2.new = false;
