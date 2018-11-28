@@ -1,7 +1,7 @@
 /* eslint-disable */
-import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from './node';
-import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from './leaf';
-import { History, BlankHistoryStep } from './history';
+import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../node';
+import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from '../leaf';
+import { History, BlankHistoryStep } from '../history';
 import {
 	instanceOf,
 	isZeroLeaf,
@@ -45,7 +45,7 @@ import {
 	_DELETE_,
 	_BACKSPACE_,
 	applyBranchText
-} from './integration';
+} from '../integration';
 
 const { expect } = require('chai');
 

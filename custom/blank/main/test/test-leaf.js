@@ -1,15 +1,16 @@
 /* eslint-disable */
-import { Leaf, LeafStyles, NullLeaf, LeafChain } from '../leaf';
+import { Node, DocumentRoot } from '../node';
+import { Leaf, LeafStyles, NullLeaf, LeafChain, ParentLink } from '../leaf';
 import { History, BlankHistoryStep } from '../history';
 import {
 	sameLeafStyles,
 	setLeafStyles,
 	copyLeafStyles,
-	printLeafChain,
 	isZeroLeaf,
 	trimRange,
 	destroyLeaf,
 	unchainLeaf,
+	setParentLink,
 	_PAST_STACK_,
 	_FUTURE_STACK_,
 	TempHistoryPastStep,
@@ -19,6 +20,7 @@ import {
 	_CHAINED_AFTER_,
 	_CHAINED_BEFORE_,
 	chainLeaf,
+	chainNode,
 	_CHAIN_AFTER_,
 	_CHAIN_BEFORE_,
 	chainLeafChainBetween,
@@ -27,6 +29,7 @@ import {
 	_TRAVERSE_UP_,
 	_TRAVERSE_DOWN_,
 	applyLeafStyle,
+	applyLeavesStyle,
 	DirtyNewLeaves,
 	autoMergeLeaf,
 	autoMergeDirtyLeaves,
@@ -34,12 +37,13 @@ import {
 	readyHistoryStep,
 	readyTempHistorySteps,
 	undo,
-	redo
+	redo,
+	_REDO_
 } from '../integration';
 
 const { expect } = require('chai');
 
-describe.skip('Leaf', function() {
+describe('Leaf', function() {
 	
 	describe('LeafStyles', function() {
 		const l1 = new Leaf({
@@ -205,11 +209,7 @@ describe.skip('Leaf', function() {
 			l2.nextLeaf = l3;
 			l3.prevLeaf = l2;
 
-			printLeafChain(l1);
-
 			l2 = destroyLeaf(l2);
-
-			printLeafChain(l1);
 
 			let result = l1.nextLeaf === l3;
 			expect(result).to.be.true;
@@ -228,7 +228,7 @@ describe.skip('Leaf', function() {
 
 describe('Leaf chaining & advanced operations', function() {
 
-	describe.skip('chained', function() {
+	describe('chained', function() {
 		let l1 = new Leaf({
 			text: 'Hello, World!'
 		});
@@ -266,7 +266,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 	});
 
-	describe.skip('chainLeaf', function() {
+	describe('chainLeaf', function() {
 		let l1 = new Leaf({
 			text: 'Hello, World!'
 		});
@@ -355,23 +355,9 @@ describe('Leaf chaining & advanced operations', function() {
 			}
 		});
 
-		it('Throw Error: chain l1 after l3', function(done) {
-			let e;
-			try {
-				chainLeaf(l1, l3);
-			} catch (error) {
-				e = error;
-			} finally {
-				let result = e instanceof Error;
-				expect(result).to.be.true;
-				console.log(e.message);
-				done();
-			}
-		});
-
 	});
 
-	describe.skip('chainLeafChainBetween', function() {
+	describe('chainLeafChainBetween', function() {
 		let l1 = new Leaf({
 			text: 'Hello, World!'
 		});
@@ -402,8 +388,6 @@ describe('Leaf chaining & advanced operations', function() {
 			l1.new = false;
 			l2.new = false;
 
-			printLeafChain(l1); console.log(' ');
-
 			chainLeafChainBetween(l3, l3, l1, l2);
 			
 			expect(l1.prevLeaf).to.equal(null);
@@ -422,8 +406,6 @@ describe('Leaf chaining & advanced operations', function() {
 
 			l3.new = false;
 
-			printLeafChain(l1); console.log(' ');
-
 			done();
 		});
 
@@ -435,7 +417,7 @@ describe('Leaf chaining & advanced operations', function() {
 			
 			chainLeaf(l5, l4);
 
-			chainLeafChainBetween(l4, l5, l3, l1);
+			chainLeafChainBetween(l4, l5, l1, l3);
 
 			expect(l1.nextLeaf).to.equal(l4);
 			expect(l4.prevLeaf).to.equal(l1);
@@ -452,13 +434,11 @@ describe('Leaf chaining & advanced operations', function() {
 			l4.new = false;
 			l5.new = false;
 
-			printLeafChain(l1); console.log(' ');
-
 			done();			
 		});
 	});
 
-	describe.skip('unchain', function() {
+	describe('unchain', function() {
 		let l1 = new Leaf({
 			text: 'Hello, World!'
 		});
@@ -500,8 +480,6 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(pastStep[0].prevLeaf).to.equal(l2);
 			expect(l2.nextLeaf).to.equal(l1);
 
-			printLeafChain(l2); console.log(' ');
-
 			done();
 		});
 
@@ -525,8 +503,6 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(pastStep[1].prevLeaf).to.equal(l2);
 			expect(l2.nextLeaf).to.equal(l3);
 
-			printLeafChain(l2); console.log(' ');
-
 			l3.new = false;
 			l4.new = false;
 			l5.new = false;
@@ -536,7 +512,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 	});
 
-	describe.skip('history', function() {
+	describe('history', function() {
 
 		it('copyHistoryStep', function(done) {
 			TempHistoryPastStep.clear();
@@ -597,7 +573,6 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(end.prevLeaf).to.equal(l1);
 			// unchained: nl(start, end)
 			l1.new = false;
-			printLeafChain(start); console.log(' ');
 
 			let pastStep = TempHistoryPastStep.stack;
 			expect(pastStep.length).to.equal(1);
@@ -617,7 +592,6 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(start.nextLeaf).to.equal(end);
 			expect(end.prevLeaf).to.equal(start);
 			// Unchained: lc(l1, l1, start, end);
-			printLeafChain(start); console.log(' ');
 
 			expect(History.stackPast.length).to.equal(0);
 			expect(History.stackFuture.length).to.equal(1);
@@ -635,14 +609,13 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(History.stackFuture.length).to.equal(1);
 
 			// Redo (ready history steps and immediately push past step after redo())
-			readyTempHistorySteps();
+			readyTempHistorySteps(_REDO_);
 			redo();
 			History.push(copyHistoryStep(TempHistoryPastStep), true);
 			// start-l1-end
 			expect(start.nextLeaf).to.equal(l1);
 			expect(end.prevLeaf).to.equal(l1);
 			// Unchained: nl(start, end);
-			printLeafChain(start); console.log(' ');
 			
 			expect(History.stackPast.length).to.equal(1);
 			expect(History.stackFuture.length).to.equal(0);
@@ -670,7 +643,6 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(start.nextLeaf).to.equal(l2);
 			expect(end.prevLeaf).to.equal(l3);
 			// Unchained: l1
-			printLeafChain(start); console.log(' ');
 
 			let pastStep = TempHistoryPastStep.stack;
 			expect(pastStep.length).to.equal(1);
@@ -684,7 +656,6 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(start.nextLeaf).to.equal(l1);
 			expect(end.prevLeaf).to.equal(l1);
 			// Unchained: lc(l2, l3, start, end)
-			printLeafChain(start); console.log(' ');
 			
 			expect(History.stackPast.length).to.equal(1);
 			expect(History.stackFuture.length).to.equal(1);			
@@ -700,14 +671,13 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(lc.nextLeaf).to.equal(end);
 
 			// Redo (ready history steps and immediately push past step after redo())
-			readyTempHistorySteps();
+			readyTempHistorySteps(_REDO_);
 			redo();
 			History.push(copyHistoryStep(TempHistoryPastStep), true);
 			// start-l2-l3-end
 			expect(start.nextLeaf).to.equal(l2);
 			expect(end.prevLeaf).to.equal(l3);
 			// Unchained: lc(l1, l1, start, end)
-			printLeafChain(start); console.log(' ');
 
 			expect(History.stackPast.length).to.equal(2);
 			expect(History.stackFuture.length).to.equal(0);
@@ -738,22 +708,26 @@ describe('Leaf chaining & advanced operations', function() {
 		});
 
 		it('consume up: same style', function(done) {
-			let l1 = new Leaf({
+			const l1 = new Leaf({
 				text: 'l1',
 				styles: new LeafStyles({
 					bold: true
 				})
 			});
 
-			let l2 = new Leaf({
+			const l2 = new Leaf({
 				text: 'l2',
 				styles: new LeafStyles({
 					bold: true
 				})
 			});
 
+			const n1 = new Node();
+
+			setParentLink(l1, n1);
 			chainLeaf(l2, l1);
 			l1.new = false;
+			n1.new = false;
 
 			let result = consume(l2);
 			expect(result).to.be.true;
@@ -761,6 +735,7 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(l2.styles.bold).to.be.true;
 			expect(l2.prevLeaf).to.equal(null);
 			expect(l2.nextLeaf).to.equal(null);
+			expect(n1.firstChild).to.equal(l2);
 
 			let pastStep = TempHistoryPastStep.stack;
 			expect(pastStep.length).to.equal(1);
@@ -801,15 +776,18 @@ describe('Leaf chaining & advanced operations', function() {
 		});
 
 		it('consume up: zero-width', function(done) {
-			let l1 = new Leaf({
+			const l1 = new Leaf({
 				text: 'l1',
 				styles: new LeafStyles({
 					bold: true
 				})
 			});
 
-			let l2 = new Leaf();
+			const l2 = new Leaf();
 
+			const n1 = new Node();
+
+			setParentLink(l1, n1);
 			chainLeaf(l2, l1);
 			l1.new = false;
 
@@ -819,6 +797,7 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(l2.styles.bold).to.be.true;
 			expect(l2.prevLeaf).to.equal(null);
 			expect(l2.nextLeaf).to.equal(null);
+			expect(n1.firstChild).to.equal(l2);
 
 			let pastStep = TempHistoryPastStep.stack;
 			expect(pastStep.length).to.equal(1);
@@ -946,7 +925,6 @@ describe('Leaf chaining & advanced operations', function() {
 			l2.new = false;
 			l3.new = false;
 			end.new = false;
-			printLeafChain(start); console.log(' ');
 			
 			// Create a zero Leaf
 			let z = new Leaf();
@@ -957,7 +935,6 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(z.prevLeaf).to.equal(l1);
 			expect(z.nextLeaf).to.equal(l3);
 			expect(l3.prevLeaf).to.equal(z);
-			printLeafChain(start); console.log(' ');
 
 			let pastStep = TempHistoryPastStep.stack;
 			expect(pastStep.length).to.equal(1);
@@ -981,7 +958,6 @@ describe('Leaf chaining & advanced operations', function() {
 			
 			expect(z.text).to.equal('l1l3');
 			expect(z.styles.bold).to.be.true;
-			printLeafChain(start); console.log(' ');
 			z.new = false;
 			
 			expect(pastStep.length).to.equal(3);
@@ -992,7 +968,6 @@ describe('Leaf chaining & advanced operations', function() {
 			readyTempHistorySteps();
 			undo();
 			History.push(copyHistoryStep(TempHistoryFutureStep));
-			printLeafChain(start); console.log(' ');
 
 			expect(start.nextLeaf).to.equal(l1);
 			expect(l1.prevLeaf).to.equal(start);
@@ -1004,10 +979,9 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(end.prevLeaf).to.equal(l3);
 
 			// Redo (ready history steps and immediately push past step after redo())
-			readyTempHistorySteps();
+			readyTempHistorySteps(_REDO_);
 			redo();
 			History.push(copyHistoryStep(TempHistoryPastStep), true);
-			printLeafChain(start); console.log(' ');
 
 			expect(start.nextLeaf).to.equal(z);
 			expect(z.prevLeaf).to.equal(start);
@@ -1051,11 +1025,9 @@ describe('Leaf chaining & advanced operations', function() {
 			l1.new = false;
 			l3.new = false;
 			end.new = false;
-			printLeafChain(start); console.log(' ');
 
 			// autoMergeLeaf on l2
 			autoMergeLeaf(l2);
-			printLeafChain(start); console.log(' ');
 
 			expect(start.nextLeaf).to.equal(l2);
 			expect(l2.prevLeaf).to.equal(start);
@@ -1081,9 +1053,15 @@ describe('Leaf chaining & advanced operations', function() {
 		describe('Range is within a single Leaf', function() {
 
 			it('Hello, world! - make \'Hello\' bold', function(done) {
-				let l1 = new Leaf({
+				const l1 = new Leaf({
 					text: 'Hello, world!'
 				});
+
+				const n1 = new Node();
+
+				setParentLink(l1, n1);
+
+				n1.new = false;
 				l1.new = false;
 
 				const range = [0, 5];
@@ -1096,15 +1074,17 @@ describe('Leaf chaining & advanced operations', function() {
 
 				let pastStep = TempHistoryPastStep.stack;
 				expect(pastStep.length).to.equal(1);
-				expect(pastStep[0]).to.equal(l1);
+				let step = pastStep[0];
+				let result = step instanceof ParentLink;
+				expect(result).to.be.true;
+				expect(step.parent).to.equal(n1);
+				expect(step.child).to.equal(l1);
 
 				expect(DirtyNewLeaves.length).to.equal(2);
 				expect(DirtyNewLeaves[0].text).to.equal('Hello');
 				expect(DirtyNewLeaves[0].styles.bold).to.be.true;
 				expect(DirtyNewLeaves[1].text).to.equal(', world!');
 				expect(DirtyNewLeaves[1].styles.bold).to.be.false;
-
-				printLeafChain(DirtyNewLeaves[0]); console.log(' ');
 
 				done();
 			});
@@ -1113,9 +1093,14 @@ describe('Leaf chaining & advanced operations', function() {
 				let l1 = new Leaf({
 					text: 'Hello, world!'
 				});
+				const n1 = new Node();
+
+				setParentLink(l1, n1);
+
+				n1.new = false;
 				l1.new = false;
 
-				const range = [9, 99];
+				const range = [9, l1.text.length];
 
 				const newStyles = {
 					italic: true
@@ -1125,15 +1110,17 @@ describe('Leaf chaining & advanced operations', function() {
 
 				let pastStep = TempHistoryPastStep.stack;
 				expect(pastStep.length).to.equal(1);
-				expect(pastStep[0]).to.equal(l1);
+				let step = pastStep[0];
+				let result = step instanceof ParentLink;
+				expect(result).to.be.true;
+				expect(step.parent).to.equal(n1);
+				expect(step.child).to.equal(l1);
 
 				expect(DirtyNewLeaves.length).to.equal(2);
-				expect(DirtyNewLeaves[0].text).to.equal('Hello, wo');
-				expect(DirtyNewLeaves[0].styles.italic).to.be.false;
-				expect(DirtyNewLeaves[1].text).to.equal('rld!');
-				expect(DirtyNewLeaves[1].styles.italic).to.be.true;
-
-				printLeafChain(DirtyNewLeaves[0]); console.log(' ');
+				expect(DirtyNewLeaves[0].text).to.equal('rld!');
+				expect(DirtyNewLeaves[0].styles.italic).to.be.true;
+				expect(DirtyNewLeaves[1].text).to.equal('Hello, wo');
+				expect(DirtyNewLeaves[1].styles.italic).to.be.false;
 
 				done();
 			});
@@ -1142,6 +1129,12 @@ describe('Leaf chaining & advanced operations', function() {
 				let l1 = new Leaf({
 					text: 'Hello, world!'
 				});
+
+				const n1 = new Node();
+
+				setParentLink(l1, n1);
+
+				n1.new = false;
 				l1.new = false;
 
 				const range = [4, 10];
@@ -1156,17 +1149,19 @@ describe('Leaf chaining & advanced operations', function() {
 
 				let pastStep = TempHistoryPastStep.stack;
 				expect(pastStep.length).to.equal(1);
-				expect(pastStep[0]).to.equal(l1);
+				let step = pastStep[0];
+				let result = step instanceof ParentLink;
+				expect(result).to.be.true;
+				expect(step.parent).to.equal(n1);
+				expect(step.child).to.equal(l1);
 
 				expect(DirtyNewLeaves.length).to.equal(3);
-				expect(DirtyNewLeaves[0].text).to.equal('Hell');
-				expect(DirtyNewLeaves[1].text).to.equal('o, wor');
-				expect(DirtyNewLeaves[1].styles.italic).to.be.true;
-				expect(DirtyNewLeaves[1].styles.bold).to.be.true;
-				expect(DirtyNewLeaves[1].styles.underline).to.be.true;
+				expect(DirtyNewLeaves[0].text).to.equal('o, wor');
+				expect(DirtyNewLeaves[0].styles.italic).to.be.true;
+				expect(DirtyNewLeaves[0].styles.bold).to.be.true;
+				expect(DirtyNewLeaves[0].styles.underline).to.be.true;
+				expect(DirtyNewLeaves[1].text).to.equal('Hell');
 				expect(DirtyNewLeaves[2].text).to.equal('ld!');
-
-				printLeafChain(DirtyNewLeaves[0]); console.log(' ');
 
 				done();
 			});
@@ -1175,6 +1170,12 @@ describe('Leaf chaining & advanced operations', function() {
 				let l1 = new Leaf({
 					text: 'Hello, world!'
 				});
+
+				const n1 = new Node();
+
+				setParentLink(l1, n1);
+
+				n1.new = false;
 				l1.new = false;
 
 				const range = [0, 99];
@@ -1187,216 +1188,331 @@ describe('Leaf chaining & advanced operations', function() {
 
 				let pastStep = TempHistoryPastStep.stack;
 				expect(pastStep.length).to.equal(1);
-				expect(pastStep[0]).to.equal(l1);
+				let step = pastStep[0];
+				let result = step instanceof ParentLink;
+				expect(result).to.be.true;
+				expect(step.parent).to.equal(n1);
+				expect(step.child).to.equal(l1);
 
 				expect(DirtyNewLeaves.length).to.equal(1);
 				expect(DirtyNewLeaves[0].text).to.equal('Hello, world!');
 				expect(DirtyNewLeaves[0].styles.bold).to.be.true;
 
-				printLeafChain(DirtyNewLeaves[0]); console.log(' ');
-
 				done();
 			});
 
 		});
 
-		describe('Range spans across three Leaves', function() {
+	});
+
+	describe('applyLeavesStyle with Node', function() {
+
+		const l1 = new Leaf({ text: 'Leaf 1' });
+		const l2 = new Leaf({ text: 'Leaf 2', styles: new LeafStyles({ bold: true, italic: true }) });
+		const l3 = new Leaf({ text: 'Leaf 3', styles: new LeafStyles({ bold: true }) });
+		const l4 = new Leaf({ text: 'Leaf 4', styles: new LeafStyles({ italic: true }) });
+		const l5 = new Leaf({ text: 'Leaf 5' });
+		const l6 = new Leaf();
+		const l7 = new Leaf({ text: 'Leaf 7', styles: new LeafStyles({ underline: true }) });
+
+		const n1 = new Node({ nodeType: 1 });
+			const n2 = new Node({ nodeType: 2 });
+			const n3 = new Node({ nodeType: 2 });
+		const n4 = new Node();
+		const n5 = new Node();
+
+		/*
+			(root)---(1)---(2)---<l1-l2-l3>
+			         |	   |
+			         |     (2)---<l4-l5>
+			         |
+			         (0)---<l6>
+			         |
+			         (0)---<l7>
+		*/
+		before(function(done) {
+			DocumentRoot.firstChild = null;
+			History.clear(_PAST_STACK_);
+			History.clear(_FUTURE_STACK_);
+			TempHistoryPastStep.clear();
+			TempHistoryFutureStep.clear();
 			
-			it('[Rang spans]B-[ across ]I-[three Leaves] - make \'pans across thr\' bold', function(done) {
-				let l1 = new Leaf({
-					text: 'Range spans',
-					styles: new LeafStyles({
-						bold: true
-					})
-				});
+			setParentLink(n1, null);
+			chainNode(n4, n1);
+			chainNode(n5, n4);
 
-				let l2 = new Leaf({
-					text: ' across ',
-					styles: new LeafStyles({
-						italic: true
-					})
-				});
+			setParentLink(n2, n1);
+			chainNode(n3, n2);
 
-				let l3 = new Leaf({
-					text: 'three Leaves'
-				});
+			setParentLink(l1, n2);
+			chainLeaf(l2, l1);
+			chainLeaf(l3, l2);
+			setParentLink(l4, n3);
+			chainLeaf(l5, l4);
+			setParentLink(l6, n4);
+			setParentLink(l7, n5);
 
-				chainLeaf(l2, l1);
-				chainLeaf(l3, l2);
+			n1.new = false;
+			n2.new = false;
+			n3.new = false;
+			n4.new = false;
+			n5.new = false;
 
-				l1.new = false;
-				l2.new = false;
-				l3.new = false;
+			l1.new = false;
+			l2.new = false;
+			l3.new = false;
+			l4.new = false;
+			l5.new = false;
+			l6.new = false;
+			l7.new = false;
 
-				const selections = [{
-					leaf: l1,
-					range: [6, 10]
-				}, {
-					leaf: l2,
-					range: [0, 50]
-				}, {
-					leaf: l3,
-					range: [0, 3]
-				}];
-
-				const newStyles = {
-					bold: true
-				};
-
-				for (const selection of selections) {
-					applyLeafStyle(selection.leaf, selection.range, newStyles);
-				}
-
-				let pastStep = TempHistoryPastStep.stack;
-				expect(pastStep.length).to.equal(2);
-				expect(pastStep[0]).to.equal(l2);
-				expect(pastStep[1]).to.equal(l3);
-
-				expect(DirtyNewLeaves.length).to.equal(3);
-				expect(DirtyNewLeaves[0].text).to.equal(' across ');
-				expect(DirtyNewLeaves[0].styles.bold).to.be.true;
-				expect(DirtyNewLeaves[0].styles.italic).to.be.true;
-
-				expect(DirtyNewLeaves[1].text).to.equal('thr');
-				expect(DirtyNewLeaves[1].styles.bold).to.be.true;
-				
-				expect(DirtyNewLeaves[2].text).to.equal('ee Leaves');
-				expect(DirtyNewLeaves[2].styles.bold).to.be.false;
-
-				printLeafChain(l1); console.log(' ');
-
-				done();
-			});
-
+			done();
 		});
 
-		describe('autoMergeLeaf && undo && redo', function() {
-			
-			it ('[This ]-[is]B-[ the final test] - make \'is\' not bold', function(done) {
-				let start = new Leaf({
-					text: 'start|',
-					styles: new LeafStyles({
-						italic: true
-					})
-				})
+		it('startLeaf and endLeaf are the same Leaf', function(done) {
+			const newStyles = { italic: false };
+			const selections = [{
+				leaf: l2,
+				range: [2, l2.text.length]
+			}, {
+				leaf: l2,
+				range: [2, l2.text.length]
+			}];
+			applyLeavesStyle(selections, newStyles);
 
-				let l1 = new Leaf({
-					text: 'This '
-				});
+			let lc = n2.firstChild;
+			expect(lc).to.equal(l1);
+			expect(lc.text).to.equal('Leaf 1');
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal('Le');
+			expect(lc.styles.bold).to.be.true;
+			expect(lc.styles.italic).to.be.true;
+			expect(lc.new).to.be.true;
+			lc.new = false;
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal('af 2Leaf 3');
+			expect(lc.styles.bold).to.be.true;
+			expect(lc.styles.italic).to.be.false;
+			expect(lc.new).to.be.true;
+			lc.new = false;
+			expect(lc.nextLeaf).to.equal(null);
 
-				let l2 = new Leaf({
-					text: 'is',
-					styles: new LeafStyles({
-						bold: true
-					})
-				});
+			done();
+		});
 
-				let l3 = new Leaf({
-					text: ' the final test'
-				});
+		it('startLeaf and endLeaf have the same parent', function(done) {
+			readyTempHistorySteps();
 
-				let end = new Leaf({
-					text: '|end',
-					styles: new LeafStyles({
-						italic: true
-					})
-				})
-				
-				chainLeaf(l1, start);
-				chainLeaf(l2, l1);
-				chainLeaf(l3, l2);
-				chainLeaf(end, l3);
-				
-				start.new = false;
-				l1.new = false;
-				l2.new = false;
-				l3.new = false;
-				end.new = false;
-				printLeafChain(start); console.log(' ');
+			const newStyles = { bold: true };
+			const selections = [{
+				leaf: l4,
+				range: [5, l4.text.length]
+			}, {
+				leaf: l5,
+				range: [0, 4]
+			}];
+			applyLeavesStyle(selections, newStyles);
 
-				const selections = [{
-					leaf: l1,
-					range: [0, 99]
-				}, {
-					leaf: l2,
-					range: [0, 99]
-				}, {
-					leaf: l3,
-					range: [0, 99]
-				}];
+			let lc = n3.firstChild;
+			expect(lc.text).to.equal('Leaf ');
+			expect(lc.styles.italic).to.be.true;
+			expect(lc.styles.bold).to.be.false;
+			expect(lc.new).to.be.true;
+			lc.new = false;
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal('4');
+			expect(lc.styles.italic).to.be.true;
+			expect(lc.styles.bold).to.be.true;
+			expect(lc.new).to.be.true;
+			lc.new = false;
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal('Leaf');
+			expect(lc.styles.bold).to.be.true;
+			expect(lc.styles.italic).to.be.false;
+			expect(lc.new).to.be.true;
+			lc.new = false;
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal(' 5');
+			expect(lc.styles.bold).to.be.false;
+			expect(lc.styles.italic).to.be.false;
+			expect(lc.new).to.be.true;
+			lc.new = false;
+			expect(lc.nextLeaf).to.equal(null);
 
-				const newStyles = {
-					bold: false
-				};
+			done();
+		});
 
-				for (const selection of selections) {
-					applyLeafStyle(selection.leaf, selection.range, newStyles);
-				}
+		it('startLeaf and endLeaf have different parents', function(done) {
+			readyTempHistorySteps();
 
-				let pastStep = TempHistoryPastStep.stack;
-				expect(pastStep.length).to.equal(1);
-				expect(pastStep[0]).to.equal(l2);
+			const newStyles = { bold: true };
+			const selections = [{
+				leaf: l6,
+				range: [0, 0]
+			}, {
+				leaf: l7,
+				range: [0, l7.text.length]
+			}];
+			applyLeavesStyle(selections, newStyles);
 
-				expect(DirtyNewLeaves.length).to.equal(1);
-				let l4 = DirtyNewLeaves[0];
-				expect(l4.text).to.equal('is');
-				expect(l4.styles.bold).to.be.false;
+			let cn = n4;
+				let cl = cn.firstChild;
+				let result = isZeroLeaf(cl);
+				expect(result).to.be.true;
+				expect(cl.styles.bold).to.be.true;
+				expect(cl.new).to.be.true;
+				cl.new = false;
+				expect(cl.nextLeaf).to.equal(null);
+			cn = cn.nextNode;
+			expect(cn).to.equal(n5);
+				cl = cn.firstChild;
+				expect(cl.text).to.equal('Leaf 7');
+				expect(cl.styles.bold).to.be.true;
+				expect(cl.styles.underline).to.be.true;
+				expect(cl.new).to.be.true;
+				cl.new = false;
+				expect(cl.nextLeaf).to.equal(null);
+			expect(cn.nextNode).to.equal(null);
 
-				// autoMergeLeaf
-				autoMergeDirtyLeaves();
+			done();
+		});
 
-				expect(l4.text).to.equal('This is the final test');
-				expect(l4.styles.bold).to.be.false;
+		it('Undo', function(done) {
+			// Undo
+			readyTempHistorySteps();
+			undo();
 
-				expect(pastStep.length).to.equal(3);
-				expect(pastStep[1]).to.equal(l1);
-				expect(pastStep[2]).to.equal(l3);
+			let cn = n4;
+				let cl = cn.firstChild;
+				expect(cl).to.equal(l6);
+				let result = isZeroLeaf(cl);
+				expect(result).to.be.true;
+				expect(cl.styles.bold).to.be.false;
+				expect(cl.nextLeaf).to.equal(null);
+			cn = cn.nextNode;
+			expect(cn).to.equal(n5);
+				cl = cn.firstChild;
+				expect(cl).to.equal(l7);
+				expect(cl.text).to.equal('Leaf 7');
+				expect(cl.styles.bold).to.be.false;
+				expect(cl.styles.underline).to.be.true;
+				expect(cl.nextLeaf).to.equal(null);
+			expect(cn.nextNode).to.equal(null);
 
-				expect(start.nextLeaf).to.equal(l4);
-				expect(l4.prevLeaf).to.equal(start);
-				expect(l4.nextLeaf).to.equal(end);
-				expect(end.prevLeaf).to.equal(l4);
+			done();
+		});
 
-				l4.new = false;
-				printLeafChain(start); console.log(' ');
+		it('Undo', function(done) {
+			// Undo
+			readyTempHistorySteps();
+			undo();
 
-				// Undo (ready history steps and immediately push future step after undo())
-				readyTempHistorySteps();
-				undo();
-				History.push(copyHistoryStep(TempHistoryFutureStep));
-				printLeafChain(start); console.log(' ');
+			let lc = n3.firstChild;
+			expect(lc).to.equal(l4);
+			expect(lc.text).to.equal('Leaf 4');
+			expect(lc.styles.italic).to.be.true;
+			expect(lc.styles.bold).to.be.false;
+			lc = lc.nextLeaf;
+			expect(lc).to.equal(l5);
+			expect(lc.text).to.equal('Leaf 5');
+			expect(lc.styles.italic).to.be.false;
+			expect(lc.styles.bold).to.be.false;
+			expect(lc.nextLeaf).to.equal(null);
 
-				expect(start.nextLeaf).to.equal(l1);
-				expect(l1.prevLeaf).to.equal(start);
-				expect(l1.text).to.equal('This ');
-				expect(l1.styles.bold).to.be.false;
-				expect(l1.nextLeaf).to.equal(l2);
-				expect(l2.prevLeaf).to.equal(l1);
-				expect(l2.text).to.equal('is');
-				expect(l2.styles.bold).to.be.true;
-				expect(l2.nextLeaf).to.equal(l3);
-				expect(l3.prevLeaf).to.equal(l2);
-				expect(l3.text).to.equal(' the final test');
-				expect(l3.styles.bold).to.be.false;
-				expect(l3.nextLeaf).to.equal(end);
-				expect(end.prevLeaf).to.equal(l3);
+			done();
+		});
 
-				// Redo (ready history steps and immediately push past step after redo())
-				readyTempHistorySteps();
-				redo();
-				History.push(copyHistoryStep(TempHistoryPastStep), true);
-				printLeafChain(start); console.log(' ');
+		it('Undo', function(done) {
+			// Undo
+			readyTempHistorySteps();
+			undo();
 
-				expect(start.nextLeaf).to.equal(l4);
-				expect(l4.prevLeaf).to.equal(start);
-				expect(l4.text).to.equal('This is the final test');
-				expect(l4.styles.bold).to.be.false;
-				expect(l4.nextLeaf).to.equal(end);
-				expect(end.prevLeaf).to.equal(l4);
+			let lc = n2.firstChild;
+			expect(lc).to.equal(l1);
+			expect(lc.text).to.equal('Leaf 1');
+			lc = lc.nextLeaf;
+			expect(lc).to.equal(l2);
+			expect(lc.text).to.equal('Leaf 2');
+			expect(lc.styles.bold).to.be.true;
+			expect(lc.styles.italic).to.be.true;
+			lc = lc.nextLeaf;
+			expect(lc).to.equal(l3);
+			expect(lc.text).to.equal('Leaf 3');
+			expect(lc.styles.bold).to.be.true;
+			expect(lc.styles.italic).to.be.false;
+			expect(lc.nextLeaf).to.equal(null);
 
-				done();
-			});
+			done();
+		});
 
+		it('Redo', function(done) {
+			// Redo
+			readyTempHistorySteps(_REDO_);
+			redo();
+
+			let lc = n2.firstChild;
+			expect(lc).to.equal(l1);
+			expect(lc.text).to.equal('Leaf 1');
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal('Le');
+			expect(lc.styles.bold).to.be.true;
+			expect(lc.styles.italic).to.be.true;
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal('af 2Leaf 3');
+			expect(lc.styles.bold).to.be.true;
+			expect(lc.styles.italic).to.be.false;
+			expect(lc.nextLeaf).to.equal(null);
+
+			done();
+		});
+
+		it('Redo', function(done) {
+			// Redo
+			readyTempHistorySteps(_REDO_);
+			redo();
+
+			let lc = n3.firstChild;
+			expect(lc.text).to.equal('Leaf ');
+			expect(lc.styles.italic).to.be.true;
+			expect(lc.styles.bold).to.be.false;
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal('4');
+			expect(lc.styles.italic).to.be.true;
+			expect(lc.styles.bold).to.be.true;
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal('Leaf');
+			expect(lc.styles.bold).to.be.true;
+			expect(lc.styles.italic).to.be.false;
+			lc = lc.nextLeaf;
+			expect(lc.text).to.equal(' 5');
+			expect(lc.styles.bold).to.be.false;
+			expect(lc.styles.italic).to.be.false;
+			expect(lc.nextLeaf).to.equal(null);
+
+			done();
+		});
+
+		it('Redo', function(done) {
+			// Redo
+			readyTempHistorySteps(_REDO_);
+			redo();
+
+			let cn = n4;
+				let cl = cn.firstChild;
+				let result = isZeroLeaf(cl);
+				expect(result).to.be.true;
+				expect(cl.styles.bold).to.be.true;
+				expect(cl.nextLeaf).to.equal(null);
+			cn = cn.nextNode;
+			expect(cn).to.equal(n5);
+				cl = cn.firstChild;
+				expect(cl.text).to.equal('Leaf 7');
+				expect(cl.styles.bold).to.be.true;
+				expect(cl.styles.underline).to.be.true;
+				expect(cl.nextLeaf).to.equal(null);
+			expect(cn.nextNode).to.equal(null);
+
+			done();
 		});
 
 	});

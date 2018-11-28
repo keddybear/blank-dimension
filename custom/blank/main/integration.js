@@ -1,5 +1,5 @@
 import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from './node';
-import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink } from './leaf';
+import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from './leaf';
 import { History, BlankHistoryStep } from './history';
 
 /*
@@ -46,8 +46,9 @@ import { History, BlankHistoryStep } from './history';
 	- Basic Leaf Chaining Ops
 	- Advanced Node Chaining Ops
 	- Advanced Leaf Chaining Ops
-	- Node Action Ops
+	- Node Action Helpers
 	- Leaf Action Helpers
+	- Node Action Ops
 	- Leaf Action Ops
 	- History Action Ops
 */
@@ -80,13 +81,14 @@ export function instanceOf(v: mixed, k: string): boolean {
 	sameNodeStyles
 	setNodeStyles
 	copyNodeStyles
+	findFirstLeafChain
 	getNextLeafChain
 	findNextLeafChain
+	getPrevLeafChain
 	getBranchType
 	getBranchTypeFromArray
 	compareBranchType
 	setFirstChild
-	printNodeTree (TODO)
 */
 
 /*
@@ -101,33 +103,68 @@ export function instanceOf(v: mixed, k: string): boolean {
 export function sameNodeStyles(n1: Node, n2: Node): boolean {
 	if (n1 === null || n2 === null) return false;
 	if (n1 === n2) return true;
+	if (n1.styles === null && n2.styles === null) return true;
+	if (n1.styles === null || n2.styles === null) return false;
 	return n1.styles.hash === n2.styles.hash;
 }
 
 /*
 	setNodeStyles:
-		- Create a new NodeStyles object for a Node from a NodeStyles object
+		- Does not create new object or use object deconstruct for copying attributes.
+			- Benchmark: https://jsperf.com/new-object-vs-copy-attr
 	@ params
 		node: Node object
 		styles: NodeStyles object
 */
 export function setNodeStyles(node: Node, styles: NodeStyles): void {
 	const n = node;
-	const { ...styleProps } = styles;
-	n.styles = new NodeStyles({ ...styleProps });
+	if (n.styles !== null && styles !== null) {
+		n.styles.fontFamily = styles.fontFamily;
+		n.styles.fontSize = styles.fontSize;
+		n.styles.textAlignment = styles.textAlignment;
+		n.styles.lineHeight = styles.lineHeight;
+		// Update hash
+		n.styles.hash = styles.hash;
+	} else if (styles === null) {
+		n.styles = null;
+	} else if (n.styles === null) {
+		n.styles = new NodeStyles({
+			fontFamily: styles.fontFamily,
+			fontSize: styles.fontSize,
+			textAlignment: styles.textAlignment,
+			lineHeight: styles.lineHeight
+		});
+	}
 }
 
 /*
 	copyNodeStyles:
-		- Copy one Node's styles to another, by creating a new NodeStyles object
+		- Does not use object deconstruct for copying attributes.
+			- Benchmark: https://jsperf.com/new-object-vs-copy-attr
 	@ params
 		node: Node object
 		nodeToCopy: Node object
 */
 export function copyNodeStyles(node: Node, nodeToCopy: Node): void {
-	const n = node;
-	const { ...styleProps } = nodeToCopy.styles;
-	n.styles = new NodeStyles({ ...styleProps });
+	setNodeStyles(node, nodeToCopy.styles);
+}
+
+/*
+	findFirstLeafChain:
+		- Return the LeafChain of the first branch in a Node tree. Return null if the
+		  branch has no Leaf.
+	@ params
+		node: Node object
+	@ return
+		lc: Leaf | null
+*/
+export function findFirstLeafChain(node: Node): Leaf | null {
+	let n = node;
+	while (n.firstChild !== null) {
+		n = n.firstChild;
+		if (instanceOf(n, 'Leaf')) return n;
+	}
+	return null;
 }
 
 /*
@@ -192,6 +229,37 @@ export function findNextLeafChain(leaf: Leaf, branch: BranchType): Leaf | null {
 	while (!instanceOf(c, 'Leaf')) {
 		b.push(new NodeType(c.nodeType, c));
 		c = c.firstChild;
+	}
+	return c;
+}
+
+/*
+	getPrevLeafChain:
+		- Find the previous LeafChain to the current one in the document tree, and
+		  return the first Leaf of that chain.
+		- The Leaf as the parameter does not have to be the first Leaf of the current
+		  LeafChain.
+	@ params
+		leaf: Leaf object
+	@ return
+		lc: Leaf | null
+*/
+export function getPrevLeafChain(leaf: Leaf): Leaf | null {
+	// Go up the parent and find previous Node
+	let p = leaf.parent;
+	if (p === null) return null;
+	while (p.prevNode === null) {
+		p = p.parent;
+		// No more parent
+		if (p === null) return null;
+	}
+	// Previous Node found
+	p = p.prevNode;
+	// Go down
+	let c = p.firstChild;
+	// Keep going down if there's no nextNode
+	while (!instanceOf(c, 'Leaf')) {
+		c = c.nextNode || c.firstChild;
 	}
 	return c;
 }
@@ -288,14 +356,6 @@ export function setFirstChild(parent: Node | null, child: Node | Leaf): void {
 	}
 }
 
-/*
-	printNodeTree:
-		- Print the tree starting from a Node.
-*/
-export function printNodeTree(node: Node): void {
-	// TODO
-}
-
 //= Basic Leaf Ops
 
 /*
@@ -350,28 +410,31 @@ export function sameLeafStyles(l1: Leaf, l2: Leaf): boolean {
 
 /*
 	setLeafStyles:
-		- Create a new LeafStyle object for Leaf from a LeafStyles object
+		- Does not create new object or use object deconstruct for copying attributes.
+			- Benchmark: https://jsperf.com/new-object-vs-copy-attr
 	@ params
 		leaf: Leaf object
 		styles: LeafStyles
 */
 export function setLeafStyles(leaf: Leaf, styles: LeafStyles): void {
-	const l = leaf;
-	const { ...styleProps } = styles;
-	l.styles = new LeafStyles({ ...styleProps });
+	const s = leaf.styles;
+	s.bold = styles.bold;
+	s.italic = styles.italic;
+	s.underline = styles.underline;
+	// Update hash
+	s.hash = styles.hash;
 }
 
 /*
 	copyLeafStyles:
-		- Copy one Leaf's styles to another, by creating a new LeafStyles object
+		- Does not use object deconstruct for copying attributes.
+			- Benchmark: https://jsperf.com/new-object-vs-copy-attr
 	@ params
 		leaf: Leaf object
 		leafToCopy: Leaf object
 */
 export function copyLeafStyles(leaf: Leaf, leafToCopy: Leaf): void {
-	const l = leaf;
-	const { ...styleProps } = leafToCopy.styles;
-	l.styles = new LeafStyles({ ...styleProps });
+	setLeafStyles(leaf, leafToCopy.styles);
 }
 
 /*
@@ -507,6 +570,7 @@ export function destroyLeaf(leaf: Leaf): null {
 
 export const _PAST_STACK_ = true;
 export const _FUTURE_STACK_ = false;
+export const _REDO_ = true; // During redo(), future stack is not cleared.
 export const TempHistoryPastStep = new BlankHistoryStep(_PAST_STACK_);
 export const TempHistoryFutureStep = new BlankHistoryStep(_FUTURE_STACK_);
 
@@ -534,10 +598,11 @@ export function copyHistoryStep(oldStep: BlankHistoryStep): BlankHistoryStep {
 		- Copy & push a history step into history if not empty.
 	@ params
 		step: BlankHistoryStep Object
+		keepFuture: Boolean - default: false
 */
-export function readyHistoryStep(step: BlankHistoryStep): void {
+export function readyHistoryStep(step: BlankHistoryStep, keepFuture: boolean = false): void {
 	if (step.stack.length > 0) {
-		History.push(copyHistoryStep(step));
+		History.push(copyHistoryStep(step), keepFuture);
 	}
 }
 
@@ -545,14 +610,16 @@ export function readyHistoryStep(step: BlankHistoryStep): void {
 	readyTempHistorySteps:
 		- Ready TempHistoryPastStep & TempHistoryFutureStep.
 		- Call this when there's a completely new Action.
+	@ params
+		keepFuture: Boolean - default: true
 	@ error
 		throw if both TempHistoryPastStep and TempHistoryFutureStep are not empty
 */
-export function readyTempHistorySteps(): void {
+export function readyTempHistorySteps(keepFuture: boolean = false): void {
 	if (TempHistoryPastStep.stack.length > 0 && TempHistoryFutureStep.stack.length > 0) {
 		throw new Error('Both TempHistoryPastStep and TempHistoryFutureStep are not empty. Something is wrong!');
 	}
-	readyHistoryStep(TempHistoryPastStep);
+	readyHistoryStep(TempHistoryPastStep, keepFuture);
 	readyHistoryStep(TempHistoryFutureStep);
 }
 
@@ -780,7 +847,13 @@ export function removeNode(
 		DocumentRoot.firstChild = nn;
 	}
 	if (n.new === false) {
-		unchainNode(n, past);
+		if (pn === null && nn === null) {
+			// Unchain a ParentLink
+			const pl = new ParentLink(n, p);
+			unchainNode(pl, past);
+		} else {
+			unchainNode(n, past);
+		}
 	}
 }
 
@@ -805,7 +878,7 @@ export function detachFirstChild(
 	if (p.firstChild === null) return null;
 	const c = p.firstChild;
 	if (p.new !== c.new) {
-		throw new Error('In detachfirstChild(), parent and child, if they exist, must be both new or old.');
+		throw new Error('In detachFirstChild(), parent and child, if they exist, must be both new or old.');
 	}
 	if (p.new === false) {
 		const pl = new ParentLink(c, parent);
@@ -1479,6 +1552,8 @@ export function createNewBranchAt(type: Array<number>, at: number): Node {
 	shatter:
 		- Cut a tree in half at the depth of the stop Node, create new parent Nodes for the
 		  second tree, and return the references to both trees in an object.
+		  	- The second tree is NOT in the original tree. It needs to be chained manually
+		  	  after shatter().
 		- If there's nothing to be cut, return null for first tree and the stop Node as the
 		  second tree.
 		- User must ensure the stop Node is in the Leaf's BranchType.
@@ -1491,7 +1566,7 @@ export function createNewBranchAt(type: Array<number>, at: number): Node {
 			- second: Node | null
 */
 export const _CUT_ABOVE_ = true; // Always cut above
-export const _CUT_BELOW_ = true; // Unused
+export const _CUT_BELOW_ = false; // Unused
 export function shatter(leaf: Leaf, stop: Node): Object {
 	const result = {
 		first: null,
@@ -1513,9 +1588,7 @@ export function shatter(leaf: Leaf, stop: Node): Object {
 				cutNode.prevNode.nextNode = null;
 				cutNode.prevNode = null;
 				// Give cutNode a new parent
-				const newParent = new Node({
-					nodeType: nextCutNode.nodeType
-				});
+				const newParent = new Node({ nodeType: nextCutNode.nodeType	});
 				cutNode.parent = null;
 				// Safe to use: cutNode remembered, and newParent is new
 				setParentLink(cutNode, newParent);
@@ -1542,9 +1615,7 @@ export function shatter(leaf: Leaf, stop: Node): Object {
 				unchainNode(phantom, _PAST_STACK_);
 			}
 			// Give lastNewParent a new parent
-			const newParent = new Node({
-				nodeType: nextCutNode.nodeType
-			});
+			const newParent = new Node({ nodeType: nextCutNode.nodeType });
 			// Safe to use: lastNewParent and newParent are new and have no ParentLink
 			setParentLink(lastNewParent, newParent);
 			// Update lastNewParent
@@ -1582,6 +1653,7 @@ export function shatter(leaf: Leaf, stop: Node): Object {
 		- Always update parent.
 		- Only chain Leaf AFTER another, never before, because this way won't mess up
 		  the parent's firstChild.
+		- It's the caller's responsibility to make sure there's no circular chaining.
 	@ params
 		newLeaf: Leaf object
 		targetLeaf: Leaf object
@@ -1591,7 +1663,7 @@ export const _CHAIN_BEFORE_ = false;
 export function chainLeaf(newLeaf: Leaf, targetLeaf: Leaf): void {
 	const n = newLeaf;
 
-	if (!n.new) {
+	if (n.new === false) {
 		throw new Error('newLeaf in chainLeaf() must be a NEW Leaf.');
 	} else if (n.prevLeaf !== null) {
 		throw new Error('newLeaf.prevLeaf must be null in chainLeaf().');
@@ -1599,14 +1671,9 @@ export function chainLeaf(newLeaf: Leaf, targetLeaf: Leaf): void {
 
 	const t = targetLeaf;
 
-	// If targetLeaf is new, chain one Leaf at a time to avoid circular referencing.
-	// Also, its nextLeaf if not null, must not be replaced.
-	if (t.new === true) {
-		if (n.prevLeaf !== null || n.nextLeaf !== null) {
-			throw new Error('If targetLeaf is new, newLeaf must have no prevLeaf or nextLeaf to avoid circular chaining.');
-		} else if (t.nextLeaf !== null) {
-			throw new Error('If new, targetLeaf\'s nextLeaf must not be replaced if not null.');
-		}
+	// No longer checks circular chaining (It can be checked while updating parent though)
+	if (t.new === true && t.nextLeaf !== null) {
+		throw new Error('If new, targetLeaf\'s nextLeaf must not be replaced if not null.');
 	}
 
 	// If already chained after, do nothing
@@ -1739,7 +1806,7 @@ export function chainLeafChainBetween(
 		// Unchain if targetLeaves are old
 		if (t1.new === false) {
 			// If targetLeaves are chained, unchain a NullLeaf
-			if (chainedNodes(t1, t2) !== _NOT_CHAINED_) {
+			if (chainedLeaf(t1, t2) !== _NOT_CHAINED_) {
 				const nn = new NullLeaf({ prevLeaf: t1, nextLeaf: t2 });
 				unchainLeaf(nn, _PAST_STACK_);
 			} else {
@@ -2020,7 +2087,7 @@ export function rechainLeaf(leaf: mixed, fromPast: boolean): void {
 */
 export const _TRAVERSE_UP_ = true;
 export const _TRAVERSE_DOWN_ = false;
-export function consume(leaf: Leaf, up: boolean): boolean {
+export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 	if (leaf.new === false) {
 		throw new Error('Only new Leaf can consume other Leaves.');
 	}
@@ -2112,13 +2179,371 @@ export function consume(leaf: Leaf, up: boolean): boolean {
 	return false;
 }
 
+//= Node Action Helpers
+
+/*
+	copyLeaf
+	copyLeafChain
+	copyNode
+	copyNodeChain
+*/
+
+/*
+	copyLeaf:
+		- Copy every attribute of a Leaf, except for its chaining and class info, into a
+		  new Leaf, and return the new Leaf.
+		- The range of text to be copied can be specified. By default, it will copy the
+		  entire text.
+	@ params
+		leaf: Leaf object
+		range: Array<number> | null - default: null
+	@ return
+		copy: Leaf object
+*/
+export function copyLeaf(leaf: Leaf, range: Array<number> | null = null): Leaf {
+	const copy = new Leaf();
+	copyLeafStyles(copy, leaf);
+	if (range === null || range.length !== 2) {
+		copy.text = leaf.text;
+	} else if (range[0] !== range[1]) {
+		copy.text = leaf.text.substring(range[0], range[1]);
+	}
+	return copy;
+}
+
+/*
+	copyLeafChain:
+		- Copy the LeafChain specified by its startLeaf and endLeaf, whose range can be
+		  specified.
+		- startLeaf must not be null, while endLeaf can be.
+		- If endLeaf is not null, it must have the same parent as startLeaf.
+		- Return an object that contains the startLeaf and endLeaf of the copied LeafChain.
+	@ params
+		startLeaf: Leaf object
+		endLeaf: Leaf | null
+		startRange: Array<number> | null - default: null
+		endRange: Array<number> | null - default: null
+	@ return
+		copy: Object
+			- startLeaf: Leaf object
+			- endLeaf: Leaf object
+*/
+export function copyLeafChain(
+	startLeaf: Leaf,
+	endLeaf: Leaf | null,
+	startRange: Array<number> | null = null,
+	endRange: Array<number> | null = null
+): Object {
+	if (startLeaf === null) {
+		throw new Error('startLeaf must not be null in copyLeafChain().');
+	}
+	if (endLeaf !== null && endLeaf.parent !== startLeaf.parent) {
+		throw new Error('If not null, endLeaf must have the same parent as startLeaf.');
+	}
+
+	if (startLeaf === endLeaf) {
+		const result = copyLeaf(startLeaf, startRange || endRange);
+		return { startLeaf: result, endLeaf: result };
+	}
+	let currentL = startLeaf;
+	let firstCopy = null;
+	let currentCopy = null;
+	let prevCopy = null;
+	let exit = false;
+	// Iterate through LeafChain
+	while (!exit) {
+		if (currentL === startLeaf) {
+			// Copy the startLeaf
+			currentCopy = copyLeaf(startLeaf, startRange);
+			firstCopy = currentCopy;
+		} else if (currentL === endLeaf) {
+			// Copy the endLeaf
+			currentCopy = copyLeaf(endLeaf, endRange);
+			exit = true;
+		} else {
+			// Copy the Leaf between startLeaf and endLeaf
+			currentCopy = copyLeaf(currentL);
+		}
+		if (prevCopy !== null) {
+			// Chain copied Leaves
+			chainLeaf(currentCopy, prevCopy);
+		}
+		prevCopy = currentCopy;
+		currentL = currentL.nextLeaf;
+		if (currentL === null) break;
+	}
+	return { startLeaf: firstCopy, endLeaf: prevCopy };
+}
+
+/*
+	copyNode:
+		- Copy every attribute of a Node, except for its chaining and class info, into a
+		  new Node, and return the new Node.
+	@ params
+		node: Node object
+	@ return
+		copy: Node object
+*/
+export function copyNode(node: Node): Node {
+	const copy = new Node();
+	copyNodeStyles(copy, node);
+	copy.nodeType = node.nodeType;
+	return copy;
+}
+
+/*
+	copyNodeChain:
+		- Copy the subtree specified by its startLeaf and endLeaf, whose range can be
+		  specified.
+		- startLeaf and endLeaf must not be null, and they must not have the same
+		  parent.
+		- Return an object that contains the startNode and endNode of the copied
+		  NodeChain, and the first Leaf of the first LeafChain, and the last Leaf of
+		  the last LeafChain.
+	@ params
+		startLeaf: Leaf object
+		endLeaf: Leaf object
+		startRange: Array<number> | null - default: null
+		endRange: Array<number> | null - default: null
+	@ return
+		copy: Object
+			- startNode: Node object
+			- endNode: Node object
+			- firstLeaf: Leaf object
+			- lastLeaf: Leaf object
+*/
+export function copyNodeChain(
+	startLeaf: Leaf,
+	endLeaf: Leaf,
+	startRange: Array<number> | null = null,
+	endRange: Array<number> | null = null
+): Object {
+	if (startLeaf === null || endLeaf === null) {
+		throw new Error('startLeaf and endLeaf must not be null in copyNodeChain().');
+	} else if (startLeaf.parent === endLeaf.parent) {
+		throw new Error('startLeaf and endLeaf must not have the same parent.');
+	}
+
+	const startNode = startLeaf.parent;
+	const endNode = endLeaf.parent;
+	const bt = getBranchType(startLeaf);
+	// Depth is used to copy startLeaf's branch Nodes before reaching startLeaf
+	let depth = 0;
+	// currentNode is used to navigate the real tree
+	// The first Node to copy is the root parent of the startLeaf
+	let currentNode = null;
+	// currentCopy stores the copied Node in the current iteration
+	let currentCopy = null;
+	// currentCopyNode is used to navigate the copied tree
+	let currentCopyNode = null;
+	// rootCopy copies the root parent of startLeaf
+	let rootCopy = null;
+	// lastCopy copies the root parent of endLeaf
+	let lastCopy = null;
+	// firstLeaf copies the first Leaf of the first LeafChain
+	let firstLeaf = null;
+	// lastLeaf copies the last Leaf of the last LeafChain
+	let lastLeaf = null;
+	// prevCopy is the copy of the previous Node of the current NodeChain
+	let prevCopy = null;
+	// prevParentCopy is the copy of a Node whose first child is a Node that has
+	// not been copied yet
+	let prevParentCopy = null;
+	// exit signal
+	let exit = false;
+	while (!exit) {
+		// Only copy currentNode if it has not been copied
+		if (currentCopyNode === null) {
+			// Before reaching startNode, copy branch Nodes
+			if (firstLeaf === null) {
+				currentNode = bt.branch[depth].ref;
+				depth += 1;
+			}
+			// Copy Node's LeafChain
+			if (currentNode === startNode) {
+				const leafChainCopy = copyLeafChain(startLeaf, null, startRange, null);
+				currentCopy = copyNode(currentNode);
+				setParentLink(leafChainCopy.startLeaf, currentCopy);
+				firstLeaf = leafChainCopy.startLeaf;
+			} else if (currentNode === endNode) {
+				const leafChainCopy = copyLeafChain(endNode.firstChild, endLeaf, null, endRange);
+				currentCopy = copyNode(currentNode);
+				setParentLink(leafChainCopy.startLeaf, currentCopy);
+				lastLeaf = leafChainCopy.endLeaf;
+				exit = true;
+			} else if (instanceOf(currentNode.firstChild, 'Leaf')) {
+				const leafChainCopy = copyLeafChain(currentNode.firstChild, null, null, null);
+				currentCopy = copyNode(currentNode);
+				setParentLink(leafChainCopy.startLeaf, currentCopy);
+			} else {
+				// currentNode's firstChild is a Node
+				currentCopy = copyNode(currentNode);
+			}
+			// Chain or set parent link
+			if (prevCopy !== null) {
+				// Chain the copied Node
+				chainNode(currentCopy, prevCopy);
+			} else if (prevParentCopy !== null) {
+				// Set parent if prevCopy is null and prevParentCopy is not
+				setParentLink(currentCopy, prevParentCopy);
+			}
+			// Update currentCopyNode
+			currentCopyNode = currentCopy;
+		}
+		// Find the rootCopy - the first currentNode whose parent is null
+		if (rootCopy === null && currentNode.parent === null) {
+			rootCopy = currentCopy;
+		}
+		// Get next Node
+		if (instanceOf(currentNode.firstChild, 'Node') && currentCopyNode.firstChild === null) {
+			currentNode = currentNode.firstChild;
+			// Update prevParentCopy
+			prevParentCopy = currentCopyNode;
+			currentCopyNode = null; // = currentCopyNode = currentCopyNode.firstChild
+			prevCopy = null;
+		} else if (currentNode.nextNode !== null) {
+			prevCopy = currentCopyNode;
+			currentNode = currentNode.nextNode;
+			currentCopyNode = currentCopyNode.nextNode;
+		} else {
+			currentNode = currentNode.parent;
+			currentCopyNode = currentCopyNode.parent;
+		}
+		// Find lastCopy if currentNode is null or exit is true
+		// When currentNode is null, exit should be true
+		if (currentNode === null || exit) {
+			if (!exit) throw new Error('copyNodeChain() exits before copying the endLeaf.');
+			lastCopy = currentCopy;
+			while (lastCopy.parent !== null) {
+				lastCopy = lastCopy.parent;
+			}
+			// Exit
+			break;
+		}
+	}
+	return { startNode: rootCopy, endNode: lastCopy, firstLeaf, lastLeaf };
+}
+
+//= Leaf Action Helpers
+
+/*
+	autoMergeLeaf
+	autoMergeDirtyLeaves
+	mergeLeafTexts
+*/
+
+/*
+	DirtyNewLeaves
+		- This array stores references to newly created Leaves that should be called autoMergeLeaf.
+			- Set consumed to false before pushing the Leaf.
+		- Don't iterate through this. Just pop and call autoMergeLeaf.
+			- Do NOT call autoMergeLeaf on Leaves that have already been merged.
+*/
+export const DirtyNewLeaves = [];
+
+/*
+	autoMergeLeaf:
+		- Consume adjacent leaves (use consume()), by first traversing up.
+		- If unable to consume, traverse down.
+		- If still unable to consume, stop.
+		- Current Leaf must be new, or it will throw error.
+		- Only call autoMergeLeaf after applyStyle is finished on all leaves
+		- autoMergeLeaf is called on all new Leaves in DirtyNewLeaves
+			- autoMergeLeaf should skip new Leaves that have already been merged.
+	@ params
+		leaf: Leaf object
+*/
+export function autoMergeLeaf(leaf: Leaf): void {
+	if (leaf.new === false) {
+		throw new Error('autoMergeLeaf must be called on a new Leaf.');
+	}
+	while (consume(leaf, _TRAVERSE_UP_));
+	while (consume(leaf, _TRAVERSE_DOWN_));
+}
+
+/*
+	autoMergeDirtyLeaves:
+		- An abstraction for iterating through DirtyNewLeaves and call autoMergeLeaf()
+		  on each.
+*/
+export function autoMergeDirtyLeaves(): void {
+	while (DirtyNewLeaves.length > 0) {
+		const dirtyLeaf = DirtyNewLeaves.pop();
+		if (dirtyLeaf.consumed !== true) {
+			autoMergeLeaf(dirtyLeaf);
+		}
+		dirtyLeaf.consumed = null;
+	}
+}
+
+/*
+	mergeLeafTexts:
+		- Merge leafText into targetLeafText if:
+			- leafText and targetLeafText reference the same Leaf.
+			- leafText's range begins right after targetLeafText's range.
+		- Merge consecutive "Delete" operations.
+		- Merge consecutive "Backspace" operations.
+		- Return true if merged successfully, else false.
+	@ params
+		leafText: LeafText object
+		targetLeafText: LeafText object
+	@ return
+		success: Boolean
+*/
+export function mergeLeafTexts(leafText: LeafText, targetLeafText: LeafText): boolean {
+	if (leafText.leaf !== targetLeafText.leaf) return false;
+
+	const lt = leafText;
+	const tlt = targetLeafText;
+
+	// Merge "Backspace"
+	// Dude + Backspace at 4,4 = Dud -> lt1: [3,3], 'e'
+	// Dud + Backspace at 3,3 = Du -> lt2: [2,2], 'd'
+	// lt2 * lt1 = [2,2], 'de'
+	// Undo
+	// Du + lt2 * lt1 = Dude -> lt3`: [2,4], ''
+	// Redo
+	// Dude + lt3` = Du -> l4: [2,2], 'de'
+	if (targetLeafText.range[0] === targetLeafText.range[1] && targetLeafText.text.length === 1 &&
+		leafText.range[0] === leafText.range[1] && leafText.text.length === 1 &&
+		targetLeafText.range[0] - 1 === leafText.range[0]) {
+		/* eslint-disable */
+		tlt.range[0] = lt.range[0];
+		tlt.range[1] = lt.range[1];
+		/* eslint-enable */
+		tlt.text = `${lt.text}${tlt.text}`;
+		return true;
+	}
+
+	// Merge "Delete"
+	// Dude + Delete at 0,0 = ude -> lt1: [0,0], 'D'
+	// ude + Delete at 0,0 = de -> lt2: [0,0], 'u'
+	// lt2 * lt1 = [0,0], 'Du'
+	//
+	// Normal merge and "Delete" merge work the same.
+	if (leafText.range[0] !== targetLeafText.range[1]) return false;
+	/* eslint-disable */
+	tlt.range[1] = lt.range[1];
+	/* eslint-enable */
+	tlt.text = `${tlt.text}${lt.text}`;
+
+	return true;
+}
+
 //= Node Action Ops
 
 /*
 	applyBranchType
 	applyNodeStyle
 	applyNodesStyle
-	applyBranchText (TODO)
+	copyBranchText
+	copyFromClipboard
+	applyCaretStyle
+	applyLeafText
+	appendAndGrow
+	shatterAndInsert
+	removeAndAppend
+	applyBranchText
 */
 
 /*
@@ -2390,311 +2815,110 @@ export function applyNodesStyle(selections: Array<Leaf>, newStyles: Object = {})
 	}
 }
 
-//= Leaf Action Helpers
-
 /*
-	autoMergeLeaf
-	autoMergeDirtyLeaves
-	mergeLeafTexts
-*/
-
-/*
-	DirtyNewLeaves
-		- This array stores references to newly created Leaves that should be called autoMergeLeaf
-		- Don't iterate through this. Just pop and call autoMergeLeaf.
-			- Do NOT call autoMergeLeaf on Leaves that have already been merged.
-*/
-export const DirtyNewLeaves = [];
-
-/*
-	autoMergeLeaf:
-		- Consume adjacent leaves (use consume()), by first traversing up.
-		- If unable to consume, traverse down.
-		- If still unable to consume, stop.
-		- Current Leaf must be new, or it will throw error.
-		- Only call autoMergeLeaf after applyStyle is finished on all leaves
-		- autoMergeLeaf is called on all new Leaves in DirtyNewLeaves
-			- autoMergeLeaf should skip new Leaves that have already been merged.
-	@ params
-		leaf: Leaf object
-*/
-export function autoMergeLeaf(leaf: Leaf): void {
-	if (leaf.new === false) {
-		throw new Error('autoMergeLeaf must be called on a new Leaf.');
-	}
-	while (consume(leaf, true));
-	while (consume(leaf, false));
-}
-
-/*
-	autoMergeDirtyLeaves:
-		- An abstraction for iterating through DirtyNewLeaves and call autoMergeLeaf()
-		  on each.
-*/
-export function autoMergeDirtyLeaves(): void {
-	while (DirtyNewLeaves.length > 0) {
-		const dirtyLeaf = DirtyNewLeaves.pop();
-		if (dirtyLeaf.consumed !== true) {
-			autoMergeLeaf(dirtyLeaf);
-		}
-		dirtyLeaf.consumed = null;
-	}
-}
-
-/*
-	mergeLeafTexts:
-		- Merge leafText into targetLeafText if:
-			- leafText and targetLeafText reference the same Leaf.
-			- leafText's range begins right after targetLeafText's range.
-		- Merge consecutive "Delete" operations.
-		- Merge consecutive "Backspace" operations.
-		- Return true if merged successfully, else false.
-	@ params
-		leafText: LeafText object
-		targetLeafText: LeafText object
-	@ return
-		success: Boolean
-*/
-export function mergeLeafTexts(leafText: LeafText, targetLeafText: LeafText): boolean {
-	if (leafText.leaf !== targetLeafText.leaf) return false;
-
-	const lt = leafText;
-	const tlt = targetLeafText;
-
-	// Merge "Backspace"
-	// Dude + Backspace at 4,4 = Dud -> lt1: [3,3], 'e'
-	// Dud + Backspace at 3,3 = Du -> lt2: [2,2], 'd'
-	// lt2 * lt1 = [2,2], 'de'
-	// Undo
-	// Du + lt2 * lt1 = Dude -> lt3`: [2,4], ''
-	// Redo
-	// Dude + lt3` = Du -> l4: [2,2], 'de'
-	if (targetLeafText.range[0] === targetLeafText.range[1] && targetLeafText.text.length === 1 &&
-		leafText.range[0] === leafText.range[1] && leafText.text.length === 1 &&
-		targetLeafText.range[0] - 1 === leafText.range[0]) {
-		/* eslint-disable */
-		tlt.range[0] = lt.range[0];
-		tlt.range[1] = lt.range[1];
-		/* eslint-enable */
-		tlt.text = `${lt.text}${tlt.text}`;
-		return true;
-	}
-
-	// Merge "Delete"
-	// Dude + Delete at 0,0 = ude -> lt1: [0,0], 'D'
-	// ude + Delete at 0,0 = de -> lt2: [0,0], 'u'
-	// lt2 * lt1 = [0,0], 'Du'
-	//
-	// Normal merge and "Delete" merge work the same.
-	if (leafText.range[0] !== targetLeafText.range[1]) return false;
-	/* eslint-disable */
-	tlt.range[1] = lt.range[1];
-	/* eslint-enable */
-	tlt.text = `${tlt.text}${lt.text}`;
-
-	return true;
-}
-
-//= Leaf Action Ops
-
-/*
-	applyLeafStyle
-	applyLeavesStyle $(arguments changed)
-	applyLeafText (Incomplete)
-	applyText (Incomplete) -> applyLeavesText
-*/
-
-/*
-	applyLeafStyle:
-		- Create three new Leaf objects with the middle one adopting new styles.
-			- New styles update old styles, not replace. (e.g. bold -> italic = bold & italic)
-		- Discard new Leaves that are zero-width
-		- Replace the old Leaf in the chain with the new one(s)
-		- Unchain the old leaf - it means putting it into the history
-			- Old Leaf is pushed into a temporary history step object
-		- Push new Leaf(s) into a dirty stack
-			- Every new Leaf in the dirty stack will be called autoMergeLeaf
-			- Give each dirty Leaf a consumed attribute, so that autoMergeLeaf will
-			  skip already consumed dirty Leaves.
-		- If range width is 0, do nothing. (This is handled by applyCaretStyle)
-		- Applying the same style does nothing.
-		- applyLeafStyle() only works on old Leaves.
-	@ params
-		leaf: Leaf object
-		range: Array object - default: [0, 0]
-		newStyles: Object - default: {}
-			- bold: Boolean
-			- italic: Boolean
-			- underline: Boolean
-*/
-export function applyLeafStyle(
-	leaf: Leaf,
-	range: Array<number> = [0, 0],
-	newStyles: Object = {}
-): void {
-	if (leaf.new === true) {
-		throw new Error('applyLeafStyle() only works on old Leaves.');
-	}
-
-	const r = trimRange(leaf, range);
-	// If range width is 0, do nothing. (This is handled by applyCaretStyle)
-	if (r[0] === r[1]) return;
-
-	const { text, styles, prevLeaf, nextLeaf, parent } = leaf;
-	const { ...oldStyles } = styles;
-	const newLeafStyles = new LeafStyles({ ...oldStyles, ...newStyles });
-	// If applying same styles, do nothing.
-	if (styles.hash === newLeafStyles.hash) return;
-
-	const t1 = text.substring(0, r[0]);
-	const t2 = text.substring(r[0], r[1]);
-	const t3 = text.substring(r[1], text.length);
-
-	let l1 = new Leaf({
-		text: t1,
-		styles: new LeafStyles({ ...oldStyles }),
-		parent,
-		prevLeaf
-	});
-	let l2 = new Leaf({
-		text: t2,
-		styles: newLeafStyles,
-		prevLeaf: l1,
-		parent
-	});
-	let l3 = new Leaf({
-		text: t3,
-		styles: new LeafStyles({ ...oldStyles }),
-		prevLeaf: l2,
-		nextLeaf,
-		parent
-	});
-
-	// Replace leaf with l1-l2-l3, and check if needed to update its parent's firstChild
-	l1.nextLeaf = l2;
-	l2.nextLeaf = l3;
-	let setFirstChild = false;
-	if (prevLeaf !== null) {
-		prevLeaf.nextLeaf = l1;
-	} else {
-		setFirstChild = true;
-	}
-	if (nextLeaf !== null) {
-		nextLeaf.prevLeaf = l3;
-	}
-
-	// Discard zero-wdith new Leaves
-	if (isZeroLeaf(l1)) {
-		l1 = destroyLeaf(l1);
-	}
-	if (isZeroLeaf(l2)) {
-		l2 = destroyLeaf(l2);
-	}
-	if (isZeroLeaf(l3)) {
-		l3 = destroyLeaf(l3);
-	}
-
-	// Unchain(this) -> put this into history stack
-	unchainLeaf(leaf, _PAST_STACK_);
-
-	// Put newly created Leaves into dirty stack
-	// Also, set the consumed attribute, which will be set to null after autoMergeLeaf
-	// Update parent's fristChild if necessary
-	if (l1 !== null) {
-		l1.consumed = false;
-		DirtyNewLeaves.push(l1);
-		if (setFirstChild) {
-			parent.firstChild = l1;
-			setFirstChild = false;
-		}
-	}
-	if (l2 !== null) {
-		l2.consumed = false;
-		DirtyNewLeaves.push(l2);
-		if (setFirstChild) {
-			parent.firstChild = l2;
-			setFirstChild = false;
-		}
-	}
-	if (l3 !== null) {
-		l3.consumed = false;
-		DirtyNewLeaves.push(l3);
-		if (setFirstChild) {
-			parent.firstChild = l3;
-			setFirstChild = false;
-		}
-	}
-}
-
-/*
-	applyLeavesStyle:
-		- Apply new styles to a selection of Leaves.
-		- Skip autoMergeLeaf() on dirty Leaves already consumed.
-			- Delete consumed attribute on dirty Leaves after autoMergeLeaf().
+	copyBranchText:
+		- Check if selections belong to the same LeafChain (same parent).
+			- If they do, only copy the LeafChain.
+			- If they don't, copy their entire branch structure.
+		- Attach the copied Leaf or Node to Clipboard, which like DocumentRoot, is also a
+		  RootNode.
 	@ params
 		selections: Array<Object>
-			- leaf: leaf Object
-			- range: Array<number>
-		newStyles: Object (LeafStyles props)
+			- Object
+				- leaf: Leaf object
+				- range: Array<number>
 */
-export function applyLeavesStyle(selections: Array<Object>, newStyles: Object): void {
+export function copyBranchText(selections: Array<Object>): void {
 	if (selections.length !== 2) return;
-	// Iterate through Leaves in selections, and call applyLeafStyle on each.
-	const [firstSelection, lastSelection] = selections;
-	let currentL = firstSelection.leaf;
-	let currentR = firstSelection.range;
-	let last = currentL === lastSelection.leaf;
-	while (currentL !== null) {
-		applyLeafStyle(currentL, currentR, newStyles);
-		if (last) {
-			break;
-		} else {
-			// Get the next Leaf
-			if (currentL.nextLeaf !== null) {
-				currentL = currentL.nextLeaf;
-			} else {
-				// If next Leaf is null, get the first Leaf of the next LeafChain
-				currentL = getNextLeafChain(currentL);
-			}
-			// Get range. If not the last Leaf in selections, use full range.
-			if (currentL !== null) {
-				last = currentL === lastSelection.leaf;
-				if (last) {
-					currentR = lastSelection.range;
-				} else {
-					currentR = [0, currentL.text.length];
-				}
-			}
-		}
+
+	const [start, end] = selections;
+	const { leaf: startLeaf, range: startRange } = start;
+	const { leaf: endLeaf, range: endRange } = end;
+
+	if (startLeaf.parent === endLeaf.parent) {
+		// Same parent -> copy the LeafChain only
+		const copy = copyLeafChain(startLeaf, endLeaf, startRange, endRange);
+		Clipboard.firstChild = copy.startLeaf;
+		Clipboard.startLeaf = copy.startLeaf;
+		Clipboard.endLeaf = copy.endLeaf;
+		Clipboard.startNode = null;
+		Clipboard.endNode = null;
+	} else {
+		// Different parent -> copy the entire branch structure
+		const copy = copyNodeChain(startLeaf, endLeaf, startRange, endRange);
+		Clipboard.firstChild = copy.startNode;
+		Clipboard.startNode = copy.startNode;
+		Clipboard.endNode = copy.endNode;
+		Clipboard.startLeaf = copy.firstLeaf;
+		Clipboard.endLeaf = copy.lastLeaf;
 	}
-	// autoMergeLeaf
-	autoMergeDirtyLeaves();
+}
+
+/*
+	copyFromClipboard:
+		- Same as copyBranchText() but return a copy of what's in Clipboard.
+		- If Clipboard is empty, return null.
+	@ return
+		copy: Object | null
+			- startNode: Node | null
+			- endNode: Node | null
+			- startLeaf: Leaf | null
+			- endLeaf: Leaf | null
+*/
+export function copyFromClipboard(): Object | null {
+	if (instanceOf(Clipboard.firstChild, 'Leaf')) {
+		const copy = copyLeafChain(Clipboard.startLeaf, null, null, null);
+		return {
+			startNode: null,
+			endNode: null,
+			startLeaf: copy.startLeaf,
+			endLeaf: copy.endLeaf
+		};
+	} else if (instanceOf(Clipboard.firstChild, 'Node')) {
+		const copy = copyNodeChain(Clipboard.startLeaf, Clipboard.endLeaf, null, null);
+		return {
+			startNode: copy.startNode,
+			endNode: copy.endNode,
+			startLeaf: copy.firstLeaf,
+			endLeaf: copy.lastLeaf
+		};
+	}
+	return null;
+}
+
+/*
+	applyCaretStyle:
+		- Simply update the attributes of CaretStyle, which is a LeafStyles object.
+		- Do not create a new object, since CaretStyle is a constant.
+	@ params
+		props: LeafStyles | Object - default: {}
+*/
+export const CaretStyle = new LeafStyles();
+export function applyCaretStyle(props: LeafStyles | Object = {}): void {
+	const cs = CaretStyle;
+	if (props.bold !== undefined) cs.bold = props.bold;
+	if (props.italic !== undefined) cs.italic = props.italic;
+	if (props.underline !== undefined) cs.underline = props.underline;
+	// Update hash
+	const b = cs.bold ? 2 ** 1 : 0;
+	const i = cs.italic ? 2 ** 2 : 0;
+	const u = cs.underline ? 2 ** 3 : 0;
+	cs.hash = b + i + u;
 }
 
 /*
 	applyLeafText:
-		- Replace part of Leaf.text specified in range with the new text, even if
-		  the resulting text is the same as the old one.
-		- Create a new LeafText object to be pushed into history stack
-		- If range covers the entire Leaf and the new text is empty, manually unchain and replace it
-		  with a new zero-width Leaf.
-		- If two adjacent LeafTexts in History Step can be merged, merge them.
-			- There's no need to merge in rechain().
-		- applyLeafText() only works on old Leaves.
-		- Applying empty string '' to a zero-width range, such as [0,0], does nothing.
-		- If leaf is zero-width and new text is not empty, make range cover the whole leaf.
-		- Don't worry about zero-width characters in new text.
+		- Apply text change in the same Leaf, unchain and merge LeafText when necessary.
+		- If replacement is empty and the range covers the entire Leaf, replace the Leaf
+		  with a dirty zeroLeaf.
+		- It does not handle "Delete" or "Backspace". removeAndAppend() handles them.
+		- It expects CaretStyle to be the same as the current Leaf's LeafStyles.
 	@ params
 		leaf: Leaf object
-		range: Array<number> - default: [0, 0]
-		text: String
-		options: null or String or Object - default: null
+		range: Array<number>
+		replacement: String
 */
-export function applyLeafText(
-	leaf: Leaf,
-	range: Array<number> = [0, 0],
-	text: string
-): void {
+export function applyLeafText(leaf: Leaf, range: Array<number>, replacement: string): void {
 	if (leaf.new === true) {
 		throw new Error('applyLeafText() only works on old Leaves.');
 	}
@@ -2702,55 +2926,43 @@ export function applyLeafText(
 	const r = trimRange(leaf, range);
 	const l = leaf;
 
-	// If leaf is zero-width and new text is empty, do nothing.
-	// Else, force range to cover the whole leaf.
-	// Deleting a lone and zero-width Leaf is handled by BlankNode (TODO)
-	if (isZeroLeaf(l)) {
-		if (text === '') return;
-		r[0] = 0;
-		r[1] = l.text.length;
-	}
-
-	// For "Backspace" at [5,5] for example, the range is changed to [4,5]
-	// For "Delete" at [0,0] for example, the range is changed to [0,1]
-	// Range change is not handled here.
-
-	// Applying empty string '' to a zero-width range, such as [0,0], do nothing.
-	if (text === '' && r[0] === r[1]) return;
-
-	// If range covers the whole Leaf and new text is empty, unchain and replace it
-	// with a new zero-width Leaf, then auto merge.
-	if (r[1] - r[0] === l.text.length && text === '') {
-		// If current Leaf is the only Leaf, BlankBlock is needed for the chaining to work (TODO)
-		// Right now, don't worry about it.
+	// Removing the entire Leaf
+	if (replacement === '' && r[1] - r[0] === l.text.length) {
 		const zl = new Leaf();
-		zl.prevLeaf = l.prevLeaf;
-		zl.nextLeaf = l.nextLeaf;
-
-		if (l.prevLeaf !== null) {
-			l.prevLeaf.nextLeaf = zl;
+		copyLeafStyles(zl, l);
+		const p = leaf.parent;
+		if (leaf.prevLeaf === null && leaf.nextLeaf === null) {
+			// Detach leaf
+			detachFirstChild(p);
+			// Set parent link between leaf's original parent and zeroLeaf
+			setParentLink(zl, p);
+		} else {
+			// Replace leaf
+			chainLeafChainBetween(zl, zl, leaf.prevLeaf, leaf.nextLeaf);
 		}
-		if (l.nextLeaf !== null) {
-			l.nextLeaf.prevLeaf = zl;
-		}
-
-		unchainLeaf(leaf, _PAST_STACK_);
-
 		zl.consumed = false;
 		DirtyNewLeaves.push(zl);
-		autoMergeDirtyLeaves();
+		// Done
 		return;
+	}
+
+	// If leaf is zero-leaf, force range to cover the whole leaf.
+	if (isZeroLeaf(l)) {
+		// If replacement is empty, do nothing.
+		if (replacement === '') return;
+		r[0] = 0;
+		r[1] = l.text.length;
 	}
 
 	const t1 = l.text.substring(0, r[0]);
 	const t2 = l.text.substring(r[0], r[1]);
 	const t3 = l.text.substring(r[1], l.text.length);
 
-	l.text = `${t1}${text}${t3}`;
+	l.text = `${t1}${replacement}${t3}`;
 
 	const lt = new LeafText({
 		leaf,
-		range: [r[0], r[0] + text.length],
+		range: [r[0], r[0] + replacement.length],
 		text: t2
 	});
 
@@ -2768,103 +2980,842 @@ export function applyLeafText(
 }
 
 /*
-	NOTE: Need applyBranchText() to be implemented (TODO)
+	appendAndGrow:
+		1. Get startLeaf, startRange, endLeaf, endRange from selections.
+		2. If replacement is pure string, separate it with newline characters.
+		3. If startLeaf and endLeaf are the same Leaf, and if replacement is pure string
+		   with no newline characters, and if CaretStyle is the same as startLeaf's
+		   LeafStyles, delegate function to applyLeafText().
+		4. Create a new Leaf from startLeaf and startRange, as appendBefore.
+			- appendBefore is dirty.
+		5. Create a new LeafChain by copying endLeaf and Leaves after it, as appendAfter.
+			- appendAfter is dirty.
+		6. If startLeaf and endLeaf have different parents, remove every LeafChain's parent
+		   after startLeaf, including endLeaf's parent.
+		7. Replace startLeaf with appendBefore.
+		8. Get first replacement element:
+			- First string in an array of strings
+				- Each pure string element will use CaretStyle.
+			- First Leaf of a LeafChain
+			- First Leaf of the first LeafChain of a NodeChain
+		9. Append the first replacement element after appendBefore. Set it as AppendPoint.
+			- If pure string and same LeafStyles, concat it after appendBefore's text. No
+			  need to unchain a LeafText, because appendBefore is new.
+			- If Leaf, chain it after appendBefore.
+		10. Iterate through replacement elements and create a new NodeChain, as middle.
+			Copy NodeType and NodeStyles from GrowPoint to Nodes in the new NodeChain.
+			Set the last Leaf of the last LeafChain in middle as AppendPoint.
+		11. Chain appendAfter after AppendPoint.
+		12. Chain middle between appendBefore's parent and its nextNode (could be null).
+		13. Auto-merge dirty Leaves.
+	@ params
+		same as applyBranchText (no flag)
+*/
+export function appendAndGrow(
+	selections: Array<Object>,
+	replacement: string | LeafChain | NodeChain
+): void {
+	const IS_STRING = 0;
+	const IS_LEAF = 1;
+	const IS_NODE = 2;
+	let type;
 
-	NOTE 2: Need to handle newline character in string as replacement (TODO)
+	// Step 1
+	const { leaf: startLeaf, range: startRange } = selections[0];
+	const { leaf: endLeaf, range: endRange } = selections[1];
 
-	applyText: (Action)
-		- Replace the entire selections with either pure text or a LeafChain
-		- There are four scenarios:
-			1. selections only contain 1 element and replacement is string.
-				- Simply change the text, and create LeafText for history
-			2. selections have more than 1 element or replacement is a LeafChain, or both.
-				- Unchain everything.
-				- Turn first Leaf into a new "fist Leaf".
-				- Turn last Leaf into a new "last Leaf".
-					- First and last Leaves can be the same Leaf.
-				- If replacement is a string, concat it after the new "first Leaf".
-					- This means replacement is unstyled text, for example, copied & pasted from
-					  Notepad or any unrecognized external source.
-					- Copy & paste from BlankEditor should always use LeafChain.
-						- Or don't. It depends on user experience.
-				- If replacement is a LeafChain, manually chain it between first and last Leaf.
-					- Assume LeafChain has been autoMergeLeaf().
-				- Auto merge all dirty Leaves.
-		- Note: new Leaves except for the first Leaf should not have parent.
+	// Step 2
+	let texts = null;
+	if ((typeof replacement) === 'string') {
+		texts = replacement.split(/[\r\n]+/);
+		// Step 3
+		if (startLeaf === endLeaf &&
+			texts.length === 1 &&
+			startLeaf.styles.hash === CaretStyle.hash) {
+			applyLeafText(startLeaf, startRange, texts[0]);
+			return;
+		}
+		type = IS_STRING;
+	}
+
+	// Step 4
+	const appendBefore = new Leaf({
+		text: startLeaf.text.substring(0, startRange[0])
+	});
+	copyLeafStyles(appendBefore, startLeaf);
+	appendBefore.consumed = false;
+	DirtyNewLeaves.push(appendBefore);
+
+	// Step 5
+	const { startLeaf: appendAfter } =
+		copyLeafChain(endLeaf, null, [endRange[1], endLeaf.text.length], null);
+	appendAfter.consumed = false;
+	DirtyNewLeaves.push(appendAfter);
+
+	// Step 6
+	if (startLeaf.parent !== endLeaf.parent) {
+		let currentLC = getNextLeafChain(startLeaf);
+		while (currentLC !== null) {
+			removeNode(currentLC.parent);
+			if (currentLC.parent === endLeaf.parent) break;
+			currentLC = getNextLeafChain(currentLC);
+		}
+	}
+
+	// Step 7
+	const prevStart = startLeaf.prevLeaf;
+	if (prevStart === null) {
+		const sp = startLeaf.parent;
+		// Detach startLeaf
+		detachFirstChild(sp);
+		// Set parent link
+		setParentLink(appendBefore, sp);
+	} else {
+		chainLeaf(appendBefore, prevStart);
+	}
+
+	// Step 8 & 9
+	let AppendPoint = null;
+	let nextLeafForNode = null; // the starting LeafChain to iterate through a NodeChain
+	if (type === IS_STRING) {
+		const first = new Leaf({ text: texts[0] });
+		setLeafStyles(first, CaretStyle);
+		chainLeaf(first, appendBefore);
+		AppendPoint = first;
+	} else if (instanceOf(replacement, 'LeafChain')) {
+		chainLeaf(replacement.startLeaf, appendBefore);
+		AppendPoint = replacement.endLeaf;
+		type = IS_LEAF;
+	} else if (instanceOf(replacement, 'NodeChain')) {
+		const first = findFirstLeafChain(replacement.startNode);
+		nextLeafForNode = getNextLeafChain(first);
+		chainLeaf(first, appendBefore);
+		AppendPoint = first;
+		type = IS_NODE;
+	}
+
+	// Step 10
+	let middleStart = null;
+	let middleEnd = null;
+	const GrowParent = appendBefore.parent;
+	const GrowType = GrowParent.nodeType;
+	const GrowStyle = GrowParent.styles;
+	if (type === IS_STRING) {
+		let GrowPoint = null;
+		let currentL = null;
+		let currentN = null;
+		let index = 1;
+		while (index < texts.length) {
+			currentL = new Leaf({ text: texts[index] });
+			setLeafStyles(currentL, CaretStyle);
+			currentN = new Node({ nodeType: GrowType });
+			setNodeStyles(currentN, GrowStyle);
+			setParentLink(currentL, currentN);
+			if (GrowPoint !== null) {
+				chainNode(currentN, GrowPoint);
+			} else {
+				middleStart = currentN;
+			}
+			GrowPoint = currentN;
+			index += 1;
+		}
+		middleEnd = GrowPoint;
+		if (currentL !== null) {
+			AppendPoint = currentL;
+		}
+	} else if (type === IS_NODE) {
+		let GrowPoint = null;
+		let currentL = null;
+		let nextL = nextLeafForNode; // AppendPoint is the first Leaf in the NodeChain
+		let currentN = null;
+		while (nextL !== null) {
+			currentL = nextL;
+			nextL = getNextLeafChain(currentL);
+			// Detach currentL (no need to unchain)
+			currentL.parent = null;
+			currentN = new Node({ nodeType: GrowType });
+			setNodeStyles(currentN, GrowStyle);
+			setParentLink(currentL, currentN);
+			if (GrowPoint !== null) {
+				chainNode(currentN, GrowPoint);
+			} else {
+				middleStart = currentN;
+			}
+			GrowPoint = currentN;
+		}
+		middleEnd = GrowPoint;
+		if (currentL !== null) {
+			// Get the last Leaf of the last LeafChain
+			while (currentL !== null) {
+				if (currentL.nextLeaf === null) break;
+				currentL = currentL.nextLeaf;
+			}
+			AppendPoint = currentL;
+		}
+	}
+
+	// Step 11
+	chainLeaf(appendAfter, AppendPoint);
+
+	// Step 12
+	if (middleStart !== null) {
+		chainNodeChainBetween(middleStart, middleEnd, GrowParent, GrowParent.nextNode);
+	}
+
+	// Step 13
+	autoMergeDirtyLeaves();
+}
+
+/*
+	shatterAndInsert:
+		1. Get startLeaf, startRange, endLeaf, endRange from selections.
+		2. Create a new Leaf from startLeaf and startRange, as appendBefore.
+			- appendBefore is dirty.
+		3. Create a new LeafChain by copying endLeaf and Leaves after it, as appendAfter.
+			- appendAfter is dirty.
+		4. Get the root parent of startLeaf and its prevNode, as startRoot and startRootPrev.
+		5. If startLeaf and endLeaf have the same parent:
+			- If appendBefore and appendAfter are both single zeroLeaves, and if startLeaf is
+			  the first Leaf in the chain, remove their parent. Set their original next
+			  LeafChain's parent as ShatterPoint.
+			- If appendBefore is zeroLeaf and startLeaf is the first Leaf in the chain, set
+			  parent link between startLeaf's parent and appendAfter. Set appendAfter as
+			  ShatterPoint.
+			- If appendAfter is one single zeroLeaf, replace startLeaf with appendBefore, and
+			  set startLeaf's original next LeafChain as ShatterPoint.
+			- Else, create a new Node after their parent. Set parent link between the new Node
+			  and appendAfter. Then set the Node as old(!) and as ShatterPoint.
+		6. If startLeaf and endLeaf have different parents:
+			- Remove every LeafChain between startLeaf and endLeaf.
+			- If appendBefore is zeroLeaf and startLeaf is the first leaf, remove startLeaf's
+			  parent.
+				- Else, replace startLeaf with appendBefore.
+			- If appendAfter is one single zeroLeaf, remove endLeaf's parent. Set endLeaf's
+			  original next LeafChain as ShatterPoint.
+		   		- Else, set parent link between endLeaf's parent and appendAfter. Set
+		   		  appendAfter as ShatterPoint.
+		7. Shatter on ShatterPoint and stop at its root parent. The results are "first" and
+		   "second".
+		   	- If ShatterPoint is null, "first" should be startRoot or startRootPrev or
+		   	  DocumentRoot's firstChild. Chain replacement after "first".
+		   	- If ShatterPoint is not null, and if "first" is null, set "first" to be the
+		   	  prevNode of "second". Chain replacement "NodeChain" between "first" and "second".
+		8. Auto-merge dirty Leaves.
+	@ params
+		same as applyBranchText (no flag)
+*/
+export function shatterAndInsert(selections: Array<Object>, replacement: NodeChain): void {
+	// Step 1
+	const { leaf: startLeaf, range: startRange } = selections[0];
+	const { leaf: endLeaf, range: endRange } = selections[1];
+
+	// Step 2
+	const appendBefore = new Leaf({
+		text: startLeaf.text.substring(0, startRange[0])
+	});
+	copyLeafStyles(appendBefore, startLeaf);
+	appendBefore.consumed = false;
+	DirtyNewLeaves.push(appendBefore);
+
+	// Step 3
+	const { startLeaf: appendAfter } =
+		copyLeafChain(endLeaf, null, [endRange[1], endLeaf.text.length], null);
+	appendAfter.consumed = false;
+	DirtyNewLeaves.push(appendAfter);
+
+	// Step 4
+	let startRoot = startLeaf.parent;
+	while (startRoot.parent !== null) {
+		startRoot = startRoot.parent;
+	}
+	const startRootPrev = startRoot.prevNode;
+
+	// Step 5 & 6
+	let ShatterPoint = null;
+	if (startLeaf.parent === endLeaf.parent) {
+		// startLeaf and endLeaf have the same parent
+		const p = startLeaf.parent;
+		const nextLeaf = getNextLeafChain(startLeaf);
+		if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null &&
+			isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) {
+			removeNode(p);
+			ShatterPoint = nextLeaf;
+		} else if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null) {
+			// Detach startLeaf from parent
+			detachFirstChild(p);
+			// Set parent link
+			setParentLink(appendAfter, p);
+			// Set ShatterPoint
+			ShatterPoint = appendAfter;
+		} else if (isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) {
+			const prevStart = startLeaf.prevLeaf;
+			// Replace startLeaf with appendBefore
+			if (prevStart === null) {
+				const sp = startLeaf.parent;
+				// Detach startLeaf
+				detachFirstChild(sp);
+				// Set parent link
+				setParentLink(appendBefore, sp);
+			} else {
+				chainLeaf(appendBefore, prevStart);
+			}
+			// Set ShatterPoint
+			ShatterPoint = nextLeaf;
+		} else {
+			// Select a middle part of the LeafChain
+			const prevStart = startLeaf.prevLeaf;
+			// Replace startLeaf with appendBefore
+			if (prevStart === null) {
+				// Detach startLeaf
+				detachFirstChild(p);
+				// Set parent link
+				setParentLink(appendBefore, p);
+			} else {
+				chainLeaf(appendBefore, prevStart);
+			}
+			// Create a new Node
+			const n = new Node({ nodeType: p.nodeType });
+			copyNodeStyles(n, p);
+			// Insert after p
+			chainNodeChainBetween(n, n, p, p.nextNode);
+			// Set parent link
+			setParentLink(appendAfter, n);
+			// Set n to old! (We pretend it has been rendered)
+			n.new = false;
+			// Set ShatterPoint
+			ShatterPoint = appendAfter;
+		}
+	} else {
+		// startLeaf and endLeaf have different parents
+		// Remove every LeafChain between startLeaf and endLeaf
+		let currentLC = getNextLeafChain(startLeaf);
+		while (currentLC.parent !== endLeaf.parent) {
+			removeNode(currentLC.parent);
+			currentLC = getNextLeafChain(currentLC);
+		}
+		// appendBefore
+		if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null) {
+			removeNode(startLeaf.parent);
+		} else {
+			const prevStart = startLeaf.prevLeaf;
+			// Replace startLeaf with appendBefore
+			if (prevStart === null) {
+				const sp = startLeaf.parent;
+				// Detach startLeaf
+				detachFirstChild(sp);
+				// Set parent link
+				setParentLink(appendBefore, sp);
+			} else {
+				chainLeaf(appendBefore, prevStart);
+			}
+		}
+		// appendAfter
+		if (isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) {
+			const nextLeaf = getNextLeafChain(endLeaf);
+			removeNode(endLeaf.parent);
+			// Set ShatterPoint
+			ShatterPoint = nextLeaf;
+		} else {
+			const p = endLeaf.parent;
+			// Detach
+			detachFirstChild(p);
+			// Set parent link
+			setParentLink(appendAfter, p);
+			// Set ShatterPoint
+			ShatterPoint = appendAfter;
+		}
+	}
+
+	// Step 7
+	if (ShatterPoint === null) {
+		// At the end of the Document
+		if (DocumentRoot.firstChild === null) {
+			// Document is empty
+			setParentLink(replacement.startNode, null);
+		} else if (startRootPrev !== null) {
+			if (startRootPrev.nextNode !== null) {
+				chainNode(replacement.startNode, startRoot);
+			} else {
+				chainNode(replacement.startNode, startRootPrev);
+			}
+		} else {
+			chainNode(replacement.startNode, startRoot);
+		}
+	} else {
+		// Find root parent of ShatterPoint
+		let shatterRoot = ShatterPoint.parent;
+		while (shatterRoot.parent !== null) {
+			shatterRoot = shatterRoot.parent;
+		}
+		// Shatter on ShatterPoint and stop at shatterRoot
+		const { first, second } = shatter(ShatterPoint, shatterRoot);
+		// Insert replacement
+		if (first !== null) {
+			// If first is not null, chain second after replacement's endNode
+			chainNode(second, replacement.endNode);
+			chainNodeChainBetween(
+				replacement.startNode,
+				second,
+				first,
+				first.nextNode
+			);
+		} else {
+			// If first is null, second is the ShatterRoot
+			chainNodeChainBetween(
+				replacement.startNode,
+				replacement.endNode,
+				second.prevNode,
+				second
+			);
+		}
+	}
+
+	// Step 8
+	autoMergeDirtyLeaves();
+}
+
+/*
+	removeAndAppend:
+		1. Get startLeaf, startRange, endLeaf, endRange from selections.
+		2. Create a new Leaf from startLeaf and startRange, as appendBefore.
+			- appendBefore is dirty.
+		3. Create a new LeafChain by copying endLeaf and Leaves after it, as appendAfter.
+			- appendAfter is dirty.
+		4. If startLeaf and endLeaf are the same Leaf:
+			- If Leaf is empty and Flag is "Newline", grow an empty Node.
+				- Same as "Leaf is empty" functionally, but I don't want to unchain a ParentLink
+				  for zeroLeaf.
+			- If Leaf is not empty and Flag is "Newline", replace startLeaf with appendBefore.
+			  Grow a new Node with appendAfter.
+			- If selection is zero-width:
+				- "Backspace" deletes the previous character, if it exists. Else it deletes the
+				  the last character in the prevLeaf, if it exists. Else it copies the current
+				  LeafChain, if not empty, removes its parent, and chain the copy after the end
+				  of the previous LeafChain, found by getPrevLeafChain(). If previous LeafChain
+				  is null, do nothing.
+				  	- Use applyLeafText() for deleting a single character.
+				- "Delete" delets the next character, if it exists. Else it deletes the first
+				  character in the nextLeaf, if it exists. Else it removes the current Leaf's
+				  parent, if the Leaf is empty and the only Leaf of the parent. Else it copies
+				  the next LeafChain, if not empty, removes its parent, and chain the copy after
+				  startLeaf. If next LeafChain is null, do nothing.
+				  	- Use applyLeafText() for deleting a single character.
+			- If selection is not zero-width and Flag is not "Newline", delegate function to
+			  applyLeafText().
+		5. If startLeaf and endLeaf have the same parent:
+			- If Flag is either "Delete" or "Backspace", replace startLeaf with appendBefore and
+			  chain appendAfter after appendBefore.
+			- If Flag is "Newline", replace startLeaf with appendBefore. Grow a new Node with
+			  appendAfter.
+		6. If startLeaf and endLeaf have different parents:
+			- Remove every LeafChain between startLeaf and endLeaf, including endLeaf's parent.
+			- If Flag is "Newline", grow a new Node after startLeaf's parent with appendAfter.
+			  Then replace startLeaf with appendBefore.
+				- If not, chain appendAfter after appendBefore and replace startLeaf with it.
+		7. Auto-merge dirty leaves.
+	@ params
+		same as applyBranchText (no replacement - it's empty string)
+*/
+export const _DELETE_ = 1;
+export const _BACKSPACE_ = 2;
+export const _NEWLINE_ = 3;
+export function removeAndAppend(
+	selections: Array<Object>,
+	flag: number | null = null
+): void {
+	// Step 1
+	const { leaf: startLeaf, range: startRange } = selections[0];
+	const { leaf: endLeaf, range: endRange } = selections[1];
+
+	// Step 2
+	const appendBefore = new Leaf({
+		text: startLeaf.text.substring(0, startRange[0])
+	});
+	copyLeafStyles(appendBefore, startLeaf);
+	appendBefore.consumed = false;
+	DirtyNewLeaves.push(appendBefore);
+
+	// Step 3
+	const { startLeaf: appendAfter } =
+		copyLeafChain(endLeaf, null, [endRange[1], endLeaf.text.length], null);
+	appendAfter.consumed = false;
+	DirtyNewLeaves.push(appendAfter);
+
+	// Step 4
+	if (startLeaf === endLeaf) {
+		if (isZeroLeaf(startLeaf) && flag === _NEWLINE_) {
+			// 4.1
+			const nn = new Node({ nodeType: startLeaf.parent.nodeType });
+			copyNodeStyles(nn, startLeaf.parent);
+			const zl = new Leaf();
+			copyLeafStyles(zl, startLeaf);
+			setParentLink(zl, nn);
+			chainNodeChainBetween(nn, nn, startLeaf.parent, startLeaf.parent.nextNode);
+		} else if (!isZeroLeaf(startLeaf) && flag === _NEWLINE_) {
+			// 4.2
+			const p = startLeaf.parent;
+			// Replace startLeaf
+			const prevStart = startLeaf.prevLeaf;
+			// Replace startLeaf with appendBefore
+			if (prevStart === null) {
+				// Detach startLeaf
+				detachFirstChild(p);
+				// Set parent link
+				setParentLink(appendBefore, p);
+			} else {
+				chainLeaf(appendBefore, prevStart);
+			}
+			// Grow new Node with appendAfter
+			const nn = new Node({ nodeType: p.nodeType });
+			copyNodeStyles(nn, p);
+			setParentLink(appendAfter, nn);
+			chainNodeChainBetween(nn, nn, p, p.nextNode);
+		} else if (startRange[0] === startRange[1]) {
+			// 4.3
+			// If selection is zero-width
+			if (flag === _BACKSPACE_) {
+				if (startRange[0] === 0 || isZeroLeaf(startLeaf)) {
+					// At the beginning of the Leaf
+					if (startLeaf.prevLeaf === null) {
+						const prevLC = getPrevLeafChain(startLeaf);
+						if (prevLC !== null) {
+							removeNode(startLeaf.parent);
+							if (!isZeroLeaf(startLeaf)) {
+								// Get the last Leaf of the previous LeafChain
+								let l = prevLC;
+								while (l.nextLeaf !== null) {
+									l = l.nextLeaf;
+								}
+								// Chain appendAfter after l
+								chainLeaf(appendAfter, l);
+							}
+						}
+					} else {
+						const prevL = startLeaf.prevLeaf;
+						const len = prevL.text.length;
+						applyLeafText(prevL, [len - 1, len], '');
+					}
+				} else {
+					// Not at the beginning of the Leaf
+					applyLeafText(startLeaf, [startRange[0] - 1, startRange[1]], '');
+				}
+			} else if (flag === _DELETE_) {
+				if (startRange[0] === startLeaf.text.length || isZeroLeaf(startLeaf)) {
+					// At the end of the Leaf
+					if (startLeaf.nextLeaf === null) {
+						const nextLC = getNextLeafChain(startLeaf);
+						if (nextLC !== null) {
+							if (isZeroLeaf(startLeaf)) {
+								removeNode(startLeaf.parent);
+							} else {
+								const { startLeaf: nextCopy } = copyLeafChain(nextLC, null, null, null);
+								nextCopy.consumed = false;
+								DirtyNewLeaves.push(nextCopy);
+								// Remove the next LeafChain's parent
+								removeNode(nextLC.parent);
+								// Chain nextCopy after startLeaf
+								chainLeaf(nextCopy, startLeaf);
+							}
+						}
+					} else {
+						const nextL = startLeaf.nextLeaf;
+						applyLeafText(nextL, [0, 1], '');
+					}
+				} else {
+					// Not at the end of the Leaf
+					applyLeafText(startLeaf, [startRange[0], startRange[1] + 1], '');
+				}
+			}
+		} else if (flag !== _NEWLINE_) {
+			// 4.4
+			applyLeafText(startLeaf, startRange, '');
+		}
+	} else {
+		// Step 5 & 6
+		if (startLeaf.parent !== endLeaf.parent) {
+			// startLeaf and endLeaf have different parents
+			// Remove every LeafChain between startLeaf and endLeaf
+			let currentLC = getNextLeafChain(startLeaf);
+			while (currentLC.parent !== endLeaf.parent) {
+				removeNode(currentLC.parent);
+				currentLC = getNextLeafChain(currentLC);
+			}
+			// Remove endLeaf's parent too
+			removeNode(endLeaf.parent);
+		}
+
+		if (flag === _NEWLINE_) {
+			const p = startLeaf.parent;
+			if (!isZeroLeaf(startLeaf)) {
+				// Replace startLeaf
+				const prevStart = startLeaf.prevLeaf;
+				// Replace startLeaf with appendBefore
+				if (prevStart === null) {
+					// Detach startLeaf
+					detachFirstChild(p);
+					// Set parent link
+					setParentLink(appendBefore, p);
+				} else {
+					chainLeaf(appendBefore, prevStart);
+				}
+			}
+			// Grow new Node with appendAfter
+			const nn = new Node({ nodeType: p.nodeType });
+			copyNodeStyles(nn, p);
+			setParentLink(appendAfter, nn);
+			chainNodeChainBetween(nn, nn, p, p.nextNode);
+		} else {
+			chainLeaf(appendAfter, appendBefore);
+			// Replace startLeaf
+			const prevStart = startLeaf.prevLeaf;
+			// Replace startLeaf with appendBefore
+			if (prevStart === null) {
+				const sp = startLeaf.parent;
+				// Detach startLeaf
+				detachFirstChild(sp);
+				// Set parent link
+				setParentLink(appendBefore, sp);
+			} else {
+				chainLeaf(appendBefore, prevStart);
+			}
+		}
+	}
+
+	// Step 7
+	autoMergeDirtyLeaves();
+}
+
+/*
+	applyBranchText:
+		- Three types of transformations:
+			1. Append + Grow (appendAndGrow)
+				- Replacement is non-empty "pure string" or "LeafChain", or
+				- startLeaf in selections is zero-leaf whose BT is not [0], or
+				- Replacement is "NodeChain", and its first Node's parent NodeType is the same as
+				  that of the first selected Leaf.
+			2. Shatter + Insert (shatterAndInsert)
+				- startLeaf in selections is zero-leaf whose BT is [0], or
+				- Selections is not "zero-empty", and
+				- Replacement is "NodeChain", whose first Node's parent NodeType is not the same as
+				  that of the first selected Leaf.
+			3. Remove + Append (removeAndAppend)
+				- Replacement is empty "pure string".
 	@ params
 		selections: Array<Object>
 			- leaf: Leaf object
 			- range: Array<number>
-		replacement: string | LeafChain
+		replacement: String | LeafChain | NodeChain
+		flag: Number | null
+*/
+export function applyBranchText(
+	selections: Array<Object>,
+	replacement: string | LeafChain | NodeChain,
+	flag: number | null = null
+): void {
+	if (selections.length !== 2) return;
+
+	let nonEmptyStringOrLeafChain = false;
+	let zeroLeaf = false;
+	let sameNodeType = false;
+	let rootBT = false;
+	let emptyString = false;
+	let isNodeChain = false;
+
+	const { leaf: startLeaf, range: startRange } = selections[0];
+	const { leaf: endLeaf, range: endRange } = selections[1];
+
+	// Replacement
+	if ((typeof replacement) === 'string') {
+		if (replacement === '') {
+			emptyString = true;
+		} else {
+			nonEmptyStringOrLeafChain = true;
+		}
+	} else if (instanceOf(replacement, 'LeafChain')) {
+		nonEmptyStringOrLeafChain = true;
+	} else if (instanceOf(replacement, 'NodeChain')) {
+		isNodeChain = true;
+		const firstLeaf = findFirstLeafChain(replacement.startNode);
+		if (firstLeaf === null) {
+			throw new Error('All Nodes in replacement must not have null firstChild');
+		}
+		if (startLeaf.parent.nodeType === firstLeaf.parent.nodeType) {
+			sameNodeType = true;
+		}
+	}
+
+	// Selections
+	if (startLeaf === endLeaf) {
+		if (startRange[0] !== endRange[0] || startRange[1] !== endRange[1]) {
+			throw new Error('If the same Leaf is selected, startRange and endRange should be the same.');
+		}
+	}
+	if (isZeroLeaf(startLeaf)) {
+		zeroLeaf = true;
+	}
+	if (startLeaf.parent.parent === null && startLeaf.parent.nodeType === 0) {
+		rootBT = true;
+	}
+
+	if (nonEmptyStringOrLeafChain || (zeroLeaf && !rootBT) || sameNodeType) {
+		appendAndGrow(selections, replacement);
+	} else if (((zeroLeaf && rootBT) || !sameNodeType) && isNodeChain) {
+		shatterAndInsert(selections, replacement);
+	} else if (emptyString) {
+		removeAndAppend(selections, flag);
+	}
+}
+
+//= Leaf Action Ops
+
+/*
+	applyLeafStyle
+	applyLeavesStyle
 */
 
-export function applyText(selections: Array<Object>, replacement: string | LeafChain): void {
-	if (selections.length === 0) return;
-
-	const r = replacement;
-
-	if (selections.length === 1 && (typeof r) === 'string') {
-		const { leaf, range } = selections[0];
-		applyLeafText(leaf, range, r);
-	} else {
-		const firstSelection = selections[0];
-		const lastSelection = selections[selections.length - 1];
-
-		const { leaf: firstLeaf, range: firstRange } = firstSelection;
-		const { ...firstLeafStylesProps } = firstLeaf.styles;
-		const { leaf: lastLeaf, range: lastRange } = lastSelection;
-		const { ...lastLeafStylesProps } = lastLeaf.styles;
-
-		// Create new first Leaf (omit nextLeaf for now)
-		const l1 = new Leaf({
-			text: firstLeaf.text.substring(0, firstRange[0]),
-			styles: new LeafStyles({ ...firstLeafStylesProps }),
-			prevLeaf: firstLeaf.prevLeaf
-		});
-		if (firstLeaf.prevLeaf !== null) {
-			firstLeaf.prevLeaf.nextLeaf = l1;
-		}
-		// Create new last Leaf (omit prevLeaf for now)
-		const l3 = new Leaf({
-			text: lastLeaf.text.substring(lastRange[1], lastLeaf.text.length),
-			styles: new LeafStyles({ ...lastLeafStylesProps }),
-			nextLeaf: lastLeaf.nextLeaf
-		});
-		if (lastLeaf.nextLeaf !== null) {
-			lastLeaf.nextLeaf.prevLeaf = l3;
-		}
-
-		// If replacement is a string, concat it after l1.text
-		if ((typeof r) === 'string') {
-			l1.text = `${l1.text}${r}`;
-			// Chain l1 and l3 together
-			l1.nextLeaf = l3;
-			l3.prevLeaf = l1;
-		} else {
-			// Manually chain LeafChain between l1 and l3
-			// Do not use ChainBetween or ChainBetweenDangerous, because l1 and l3
-			// are not chained.
-			l1.nextLeaf = r.startLeaf;
-			r.startLeaf.prevLeaf = l1;
-			r.endLeaf.nextLeaf = l3;
-			l3.prevLeaf = r.endLeaf;
-		}
-
-		// Unchain everything in selections
-		for (const selection of selections) {
-			unchainLeaf(selection.leaf, _PAST_STACK_);
-		}
-
-		// Push new Leaves to dirty stack
-		// Assume LeafChain is not dirty
-		l1.consumed = false;
-		DirtyNewLeaves.push(l1);
-		l3.consumed = false;
-		DirtyNewLeaves.push(l3);
-
-		// autoMergeLeaf
-		autoMergeDirtyLeaves();
+/*
+	applyLeafStyle:
+		1. Throw error if leaf is new.
+		2. Trim range.
+			- If range is zero-width, do nothing, unless the leaf is a zeroLeaf.
+				- User Action should call applyCaretStyle() if selection is zero-width, or
+				  applyLeavesStyle() if not, so it's possible for applyLeafStyle to handle
+				  zeroLeaf whose range will always be trimmed to zero-width.
+		3. Create new LeafStyles from newStyles and leaf's LeafStyles.
+			- If new LeafStyles is the same as the Leaf's LeafStyles, do nothing.
+		4. Create a middle new Leaf using the range. "middle" is dirty.
+		5. If leaf is zeroLeaf, replace it with middle.
+		6. Create two new Leaves using the left side and right side of the range, as "before"
+		   and "after". Chain them with middle if they are not zeroLeaves. They are dirty.
+		7. Replace leaf with the new LeafChain.
+	@ params
+		leaf: Leaf object
+		range: Array object - default: [0, 0]
+		newStyles: Object - default: {}
+			- bold: Boolean
+			- italic: Boolean
+			- underline: Boolean
+*/
+export function applyLeafStyle(
+	leaf: Leaf,
+	range: Array<number> | null = null,
+	newStyles: Object = {}
+): void {
+	// Step 1
+	if (leaf.new === true) {
+		throw new Error('applyLeafStyle() only works on old Leaves.');
 	}
+
+	// Step 2
+	const r = trimRange(leaf, range || [0, leaf.text.length]);
+	// If range width is 0, do nothing. applyCaretStyle() handles this.
+	if (r[0] === r[1] && !isZeroLeaf(leaf)) return;
+
+	// Step 3
+	const { text, styles, prevLeaf, nextLeaf, parent } = leaf;
+	const { ...oldStyles } = styles;
+	const newLeafStyles = new LeafStyles({ ...oldStyles, ...newStyles });
+	// If applying same styles, do nothing.
+	if (styles.hash === newLeafStyles.hash) return;
+
+	// Step 4
+	const middle = new Leaf({
+		text: text.substring(r[0], r[1]),
+		styles: newLeafStyles
+	});
+	middle.consumed = false;
+	DirtyNewLeaves.push(middle);
+
+	// Step 5
+	if (isZeroLeaf(leaf)) {
+		// If leaf is zeroLeaf, it should be the only Leaf in the Node
+		// Detach leaf
+		detachFirstChild(parent);
+		// Set parent link between middle and leaf's original parent
+		setParentLink(middle, parent);
+		return;
+	}
+
+	// Step 6
+	let startLeaf = middle;
+	let endLeaf = middle;
+
+	const before = new Leaf({
+		text: text.substring(0, r[0]),
+		styles: new LeafStyles({ ...oldStyles })
+	});
+	const after = new Leaf({
+		text: text.substring(r[1], text.length),
+		styles: new LeafStyles({ ...oldStyles })
+	});
+
+	if (!isZeroLeaf(before)) {
+		chainLeaf(middle, before);
+		before.consumed = false;
+		DirtyNewLeaves.push(before);
+		startLeaf = before;
+	}
+	if (!isZeroLeaf(after)) {
+		chainLeaf(after, middle);
+		after.consumed = false;
+		DirtyNewLeaves.push(after);
+		endLeaf = after;
+	}
+
+	// Step 7
+	if (prevLeaf === null && nextLeaf === null) {
+		// Detach leaf
+		detachFirstChild(parent);
+		// Set parent link
+		setParentLink(startLeaf, parent);
+	} else {
+		chainLeafChainBetween(startLeaf, endLeaf, prevLeaf, nextLeaf);
+	}
+}
+
+/*
+	applyLeavesStyle:
+		- Apply new styles to a selection of Leaves.
+		- Skip autoMergeLeaf() on dirty Leaves already consumed.
+			- Delete consumed attribute on dirty Leaves after autoMergeLeaf().
+	@ params
+		selections: Array<Object>
+			- leaf: leaf Object
+			- range: Array<number>
+		newStyles: Object (LeafStyles props)
+*/
+export function applyLeavesStyle(selections: Array<Object>, newStyles: Object): void {
+	if (selections.length !== 2) return;
+	// Iterate through Leaves in selections, and call applyLeafStyle on each.
+	const { leaf: startLeaf, range: startRange } = selections[0];
+	const { leaf: endLeaf, range: endRange } = selections[1];
+
+	let currentL = null;
+	let nextL = startLeaf;
+	let exit = false;
+	while (nextL !== null) {
+		// Update currentL
+		currentL = nextL;
+		// Find nextL
+		if (currentL.nextLeaf === null) {
+			nextL = getNextLeafChain(currentL);
+		} else {
+			nextL = currentL.nextLeaf;
+		}
+		// applyLeafStyle
+		if (currentL === endLeaf) {
+			applyLeafStyle(currentL, endRange, newStyles);
+			exit = true;
+		} else if (currentL === startLeaf) {
+			applyLeafStyle(currentL, startRange, newStyles);
+		} else {
+			applyLeafStyle(currentL, null, newStyles);
+		}
+		// Exit
+		if (exit) break;
+	}
+	// autoMergeLeaf
+	autoMergeDirtyLeaves();
 }
 
 //= History Action Ops
