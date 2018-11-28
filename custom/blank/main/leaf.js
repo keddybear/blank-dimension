@@ -3,8 +3,11 @@ import { Node } from './node';
 
 export class LeafStyles {
 	/*
-		LeafStyles is immutable. DO NOT change its properties. To change properties, create
-		a new LeafStyles object.
+		NOTE: If you change LeafStyles attributes, you need to update setLeafStyles() and
+		applyCaretStyle().
+
+		Modifying old Leaves' LeafStyles without creating new Leaves is not allowed, because
+		leaves with the same styles need to be merged and only new leaves can be merged.
 	*/
 
 	/*
@@ -29,10 +32,10 @@ export class LeafStyles {
 				- italic: Boolean (optional)
 				- underline: Boolean (optional)
 	*/
-	constructor(styleProps: Object = {}) {
-		this.bold = styleProps.bold || false;
-		this.italic = styleProps.italic || false;
-		this.underline = styleProps.underline || false;
+	constructor(props: Object = {}) {
+		this.bold = props.bold || false;
+		this.italic = props.italic || false;
+		this.underline = props.underline || false;
 
 		const b = this.bold ? 2 ** 1 : 0;
 		const i = this.italic ? 2 ** 2 : 0;
@@ -289,3 +292,49 @@ export class ParentLink {
 		this.ParentLink = true;
 	}
 }
+
+class ClipboardNode {
+	/*
+		Clipboard functions like a RootNode but it accepts Leaf as its firstChild. It
+		also does not have a "new attribute".
+
+		If its firstChild is a Leaf, its startLeaf and endLeaf indicate the start and
+		the end of the LeafChain.
+
+		If its firstChild is a Node, its startNode and endNode indicate the start and
+		the end of the NodeChain, while its startLeaf and endLeaf indicates the very
+		first Leaf and the very last Leaf in the copied tree for easy future copying,
+		since copyNodeChain() takes Leaves as parameters.
+	*/
+
+	/*
+		@ attributes
+		firstChild: Node | Leaf | null
+		startNode: Node | null
+		endNode: Node | null
+		startLeaf: Leaf | null
+		endLeaf: Leaf | null
+		Clipboard: Boolean
+	*/
+	firstChild: Node | Leaf | null;
+	startNode: Node | null;
+	endNode: Node | null;
+	startLeaf: Leaf | null;
+	endLeaf: Leaf | null;
+	ClipboardNode: boolean;
+
+	/*
+		constructor
+	*/
+	constructor() {
+		this.firstChild = null;
+		this.startNode = null;
+		this.endNode = null;
+		this.startLeaf = null;
+		this.endLeaf = null;
+		// Identity check
+		this.ClipboardNode = true;
+	}
+}
+
+export const Clipboard = new ClipboardNode();

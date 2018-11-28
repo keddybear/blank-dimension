@@ -1,14 +1,12 @@
 // @flow
 
-const getUnique = (n1, n2) => (0.5 * (n1 + n2) * (n1 + n2 + 1)) + n2;
 // Authors and readers are allowed to customize their own default styles.
 export const DefaultNodeStyles = {};
 export class NodeStyles {
 	/*
-		NodeStyles is immutable. DO NOT change its properties. To change properties, create
-		a new NodeStyles object.
-
 		NodeStyles are for Nodes whose children are Leaves.
+
+		NOTE: If you change NodeStyles attributes, you need to update setNodeStyles().
 	*/
 
 	/*
@@ -46,8 +44,8 @@ export class NodeStyles {
 		this.textAlignment = styleProps.textAlignment || defaultProps.textAlignment || 0;
 		this.lineHeight = styleProps.lineHeight || defaultProps.lineHeight || '1.6em';
 
-		const unique = getUnique(this.fontFamily, this.textAlignment);
-		this.hash = `${this.fontSize}-${this.lineHeight}-${unique}`; // "16px-1.6em-25748"
+		// Get hash
+		this.hash = `${this.fontSize}-${this.lineHeight}-${this.fontFamily}-${this.textAlignment}`;
 
 		// ref is used in rechainNode()
 		this.ref = null;
