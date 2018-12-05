@@ -1,5 +1,53 @@
 // @flow
 
+let BlankCounterExists = false;
+export class BlankElementCounter {
+	/*
+		A simple class to generate unique id for Node and Leaf. Only one instance can
+		be created.
+
+		NOTE: When the document is saved, ids are not saved, because the document tree
+		will be rebuilt when it's loaded and new ids will be generated, starting from
+		1.
+	*/
+
+	/*
+		@ attributes
+		value: number
+	*/
+	value: number;
+
+	/*
+		@ methods
+		get
+	*/
+
+	/*
+		constructor
+	*/
+	constructor() {
+		if (BlankCounterExists === true) {
+			throw new Error('Only one instance of BlankElementCounter can be created.');
+		}
+		BlankCounterExists = true;
+
+		this.value = 0;
+	}
+
+	/*
+		get:
+			- Increase counter by 1 and return the new value.
+		@ return
+			value: number
+	*/
+	get(): number {
+		this.value += 1;
+		return this.value;
+	}
+}
+
+export const BlankCounter = new BlankElementCounter();
+
 // Authors and readers are allowed to customize their own default styles.
 export const DefaultNodeStyles = {};
 export class NodeStyles {
@@ -55,6 +103,13 @@ export class NodeStyles {
 	}
 }
 
+// DOM Element attributes
+export const NodeDataAttributes = {
+	// NODE_KEY_ATTR: Attached to the root Element when rendering a Node. Value: Node.id
+	NODE_KEY_ATTR: 'data-node-key',
+	NODE_KEY_ATTR_CAMEL: 'nodeKey'
+};
+
 export class Node {
 	/*
 		Nodes can be recursively nested.
@@ -79,6 +134,7 @@ export class Node {
 			- ...
 		new: Boolean - default true
 		Node: Boolean - default true
+		id: number
 	*/
 	styles: NodeStyles | null;
 	nodeType: number;
@@ -89,6 +145,7 @@ export class Node {
 	parent: Node | null;
 	new: boolean;
 	Node: boolean;
+	id: number; // unique id
 
 	/*
 		constructor
@@ -118,6 +175,9 @@ export class Node {
 
 		// Identity check
 		this.Node = true;
+
+		// Id
+		this.id = BlankCounter.get();
 	}
 }
 
@@ -379,20 +439,26 @@ export class PhantomChain {
 	}
 }
 
+export const BLANK_EDITOR_ID = 'blank-editor';
 class RootNode {
 	/*
-		RootNode is the document root of BlankEditor
+		RootNode is the document root of BlankEditor.
 
 		Nodes whose parents are RootNode have null as parent.
+
+		Its "container" stores the reference to the root HTMLElement for BlankEditor. (TODO)
 	*/
 
 	/*
 		@ attributes
 		firstChild: Node object
+		new: boolean
+		container: HTMLElement | null
 		RootNode: Boolean
 	*/
 	firstChild: Node | null;
 	new: boolean;
+	container: HTMLElement | null; // TODO (Should not be null)
 	RootNode: boolean;
 
 	/*
@@ -402,6 +468,10 @@ class RootNode {
 		this.firstChild = null;
 		// RootNode is always old
 		this.new = false;
+
+		// Temporary (TODO)
+		this.container = (typeof window !== 'undefined' && window.document) ?
+			window.document.getElementById(`${BLANK_EDITOR_ID}`) : null;
 
 		// Identity check
 		this.RootNode = true;

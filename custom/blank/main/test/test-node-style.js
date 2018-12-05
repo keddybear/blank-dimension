@@ -2,8 +2,8 @@
 import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../node';
 import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink } from '../leaf';
 import { History, BlankHistoryStep } from '../history';
+import { instanceOf } from '../utils';
 import {
-	instanceOf,
 	sameNodeStyles,
 	setNodeStyles,
 	copyNodeStyles,
@@ -35,7 +35,6 @@ import {
 	chainLeaf,
 	readyHistoryStep,
 	readyTempHistorySteps,
-	copyHistoryStep,
 	undo,
 	redo,
 	applyBranchType,
@@ -2517,7 +2516,6 @@ describe('Node Action Ops', function() {
 	applyBranchType
 	applyNodeStyle
 	applyNodesStyle
-	applyBranchText (TODO)
 */
 
 	describe('applyBranchType', function() {
@@ -2648,7 +2646,7 @@ describe('Node Action Ops', function() {
 				         (1)---(2)---<l9>
 			*/
 			it('Apply [1, 2] to selections [l3, l8]', function(done) {
-				const selections = [l3, l8];
+				const selections = [{ leaf: l3, range: [0, l3.text.length] }, { leaf: l8, range: [0, l8.text.length ] }];
 				const newBT = [1, 2];
 				applyBranchType(selections, newBT);
 
@@ -2920,7 +2918,7 @@ describe('Node Action Ops', function() {
 				               (2)---<l7>
 			*/
 			it('Apply [1, 2] to selections [l3, l7]', function(done) {
-				const selections = [l3, l7];
+				const selections = [{ leaf: l3, range: [0, l3.text.length] }, { leaf: l7, range: [0, l7.text.length] }];
 				const newBT = [1, 2];
 				applyBranchType(selections, newBT);
 
@@ -3156,7 +3154,7 @@ describe('Node Action Ops', function() {
 			});
 
 			it('Apply [0] to selections [l1, l8]', function(done) {
-				const selections = [l1, l8];
+				const selections = [{ leaf: l1, range: [0, l1.text.length] }, { leaf: l8, range: [0, l8.text.length] }];
 				const newBT = [0];
 				applyBranchType(selections, newBT);
 
@@ -3274,7 +3272,7 @@ describe('Node Action Ops', function() {
 
 		it('Apply { fontFamily: 2 } to selections [l1, l4]', function(done) {
 			const newStyles = { fontFamily: 2 };
-			const selections = [l1, l4];
+			const selections = [{ leaf: l1, range: [0, l1.text.length] }, { leaf: l4, range: [0, l4.text.length] }];
 			applyNodesStyle(selections, newStyles);
 
 			let pastStep = TempHistoryPastStep.stack;
@@ -3346,6 +3344,7 @@ describe('Node Action Ops', function() {
 
 			done();
 		});
+
 	});
 
 });

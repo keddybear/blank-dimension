@@ -1,6 +1,8 @@
 import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from './node';
-import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from './leaf';
-import { History, BlankHistoryStep } from './history';
+import { Leaf, isZeroLeaf, isTextLeaf, LeafStyles, CaretStyle, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from './leaf';
+import { History, BlankHistoryStep, copyHistoryStep } from './history';
+import { type SelectionObject, copySelectionObject, BeforeActionSelection, PostActionSelection, setPAS, setWindowSelection, copyBlankSelection } from './selection';
+import { instanceOf, BlankFlags } from './utils';
 
 /*
 	Before you begin writing functions, each function should be assigned a responsibility, and it
@@ -21,24 +23,30 @@ import { History, BlankHistoryStep } from './history';
 			- It performs Node and Leaf changes, and makes sure TempHistoryPastStep and
 			  TempHistoryFutureStep have elements that, when iterated through, can be used to undo
 			  those changes.
+			- It produces a new user selection, after the action is done. The new user selection
+			  can be the same as the previous one.
 		NO:
 			- It does not decide when to push history steps into history stacks.
+			- It does not decide what to do with the new user selection.
+
+	Complete Action
+		YES:
+			- It decides when to push history, when to perform Action, and what to do with the
+			  original user selection and the new user selection.
+		NO:
+			- It does not care how an Action is performed.
 
 	User Action
 		YES:
-			- It comprises of the current user selection and an action command that triggers an
-			  Action.
-			- It decides when to push history steps into history stacks.
-			- A User Action will produce a new user selection, after the action is done. The new
-			  user selection can be the same as the previous one.
+			- It comprises of the current user selection and an action command that decides what
+			  Complete Actions to perform.
 		NO:
-			- It does not decide how an Action will be performed.
+			- It does not care how a Complete Action is performed.
 */
 
 /*
 	INDEX
 
-	- Utils
 	- Basic Node Ops
 	- Basic Leaf Ops
 	- Basic History Ops
@@ -51,29 +59,8 @@ import { History, BlankHistoryStep } from './history';
 	- Node Action Ops
 	- Leaf Action Ops
 	- History Action Ops
+	- User Action Contractors
 */
-
-//= Utils
-
-/*
-	instanceOf
-*/
-
-/*
-	instanceOf:
-		- Used to replace instanceof, which is slow according to jsPerf: https://jsperf.com/instanceof-vs-undefined
-		- It expects the variable v to have an "identity" attribute, and compares it against
-		  its identity name.
-		- Though not the fastest, this function exists for maintenance reason.
-	@ params
-		v: mixed
-		k: String
-	@ return
-		bool: Boolean
-*/
-export function instanceOf(v: mixed, k: string): boolean {
-	return v[k] !== undefined;
-}
 
 //= Basic Node Ops
 
@@ -114,9 +101,9 @@ export function sameNodeStyles(n1: Node, n2: Node): boolean {
 			- Benchmark: https://jsperf.com/new-object-vs-copy-attr
 	@ params
 		node: Node object
-		styles: NodeStyles object
+		styles: NodeStyles | null
 */
-export function setNodeStyles(node: Node, styles: NodeStyles): void {
+export function setNodeStyles(node: Node, styles: NodeStyles | null): void {
 	const n = node;
 	if (n.styles !== null && styles !== null) {
 		n.styles.fontFamily = styles.fontFamily;
@@ -315,8 +302,8 @@ export function getBranchTypeFromArray(branch: Array<number>): BranchType {
 	@ return
 		index: Number
 */
-export const _SHALLOW_ = true;
-export const _DEEP_ = false;
+export const _SHALLOW_ = true; // eslint-disable-line
+export const _DEEP_ = false; // eslint-disable-line
 export function compareBranchType(
 	branchA: BranchType,
 	branchB: BranchType,
@@ -365,7 +352,6 @@ export function setFirstChild(parent: Node | null, child: Node | Leaf): void {
 	copyLeafStyles
 	printLeafStyles
 	printLeafChain
-	isZeroLeaf
 	trimRange
 	destroyLeaf
 */
@@ -488,18 +474,6 @@ export function printLeafChain(leaf: Leaf): void {
 }
 
 /*
-	isZeroLeaf:
-		- Check if a Leaf's text is only zero-width space.
-	@ params
-		leaf: Leaf object
-	@ return
-		Boolean
-*/
-export function isZeroLeaf(leaf: Leaf): boolean {
-	return leaf.text === '\u200b';
-}
-
-/*
 	trimRange:
 		- Make sure the selection range argument passed to methods is an array of two numbers
 		- The second number >= the first number
@@ -563,64 +537,67 @@ export function destroyLeaf(leaf: Leaf): null {
 //= Basic History Ops
 
 /*
-	copyHistoryStep
-	readyHistoryStep
 	readyTempHistorySteps
+	saveBAS
+	savePAS
 */
 
-export const _PAST_STACK_ = true;
-export const _FUTURE_STACK_ = false;
-export const _REDO_ = true; // During redo(), future stack is not cleared.
+export const _PAST_STACK_ = true; // eslint-disable-line
+export const _FUTURE_STACK_ = false; // eslint-disable-line
 export const TempHistoryPastStep = new BlankHistoryStep(_PAST_STACK_);
 export const TempHistoryFutureStep = new BlankHistoryStep(_FUTURE_STACK_);
 
 /*
-	copyHistoryStep:
-		- Since TempHistoryStep will be cleared before any action is performed, its stack
-		  needs to be copied before being put into the History stack.
-		- Copy the reference of the old stack and declare [] for TempHistoryStep
-		- past and future values are also copied.
-		- Return the new Step
-	@ params
-		oldStep: BlankHistoryStep
-	@ return
-		newStep: BlankHistoryStep
-*/
-export function copyHistoryStep(oldStep: BlankHistoryStep): BlankHistoryStep {
-	const newStep = new BlankHistoryStep(oldStep.past);
-	newStep.stack = oldStep.stack;
-	oldStep.detach();
-	return newStep;
-}
-
-/*
-	readyHistoryStep:
-		- Copy & push a history step into history if not empty.
-	@ params
-		step: BlankHistoryStep Object
-		keepFuture: Boolean - default: false
-*/
-export function readyHistoryStep(step: BlankHistoryStep, keepFuture: boolean = false): void {
-	if (step.stack.length > 0) {
-		History.push(copyHistoryStep(step), keepFuture);
-	}
-}
-
-/*
 	readyTempHistorySteps:
 		- Ready TempHistoryPastStep & TempHistoryFutureStep.
-		- Call this when there's a completely new Action.
-	@ params
-		keepFuture: Boolean - default: true
+			- Copy & push them into history if their stacks are not empty.
+			- Being copied or not, always clear them.
+		- Call this when the new Action is a completely new step.
 	@ error
 		throw if both TempHistoryPastStep and TempHistoryFutureStep are not empty
 */
-export function readyTempHistorySteps(keepFuture: boolean = false): void {
+export function readyTempHistorySteps(): void {
 	if (TempHistoryPastStep.stack.length > 0 && TempHistoryFutureStep.stack.length > 0) {
 		throw new Error('Both TempHistoryPastStep and TempHistoryFutureStep are not empty. Something is wrong!');
 	}
-	readyHistoryStep(TempHistoryPastStep, keepFuture);
-	readyHistoryStep(TempHistoryFutureStep);
+	// Copy HistoryStep if its stack is not empty
+	if (TempHistoryPastStep.stack.length > 0) {
+		History.push(copyHistoryStep(TempHistoryPastStep));
+	}
+	if (TempHistoryFutureStep.stack.length > 0) {
+		History.push(copyHistoryStep(TempHistoryFutureStep));
+	}
+	// Always clear
+	TempHistoryPastStep.clear();
+	TempHistoryFutureStep.clear();
+}
+
+/*
+	saveBAS:
+		- Copy current BAS to either TempHistoryPastStep or TempHistoryFutureStep.
+	@ params
+		past: Boolean
+*/
+export function saveBAS(past: boolean): void {
+	if (past) {
+		copyBlankSelection(TempHistoryPastStep.bas, BeforeActionSelection);
+	} else {
+		copyBlankSelection(TempHistoryFutureStep.bas, BeforeActionSelection);
+	}
+}
+
+/*
+	savePAS:
+		- Copy current PAS to either TempHistoryPastStep or TempHistoryFutureStep.
+	@ params
+		past: Boolean
+*/
+export function savePAS(past: boolean): void {
+	if (past) {
+		copyBlankSelection(TempHistoryPastStep.pas, PostActionSelection);
+	} else {
+		copyBlankSelection(TempHistoryFutureStep.pas, PostActionSelection);
+	}
 }
 
 //= Basic Node Chaining Ops
@@ -659,9 +636,9 @@ export function unchainNode(
 	@ return
 		chained: Boolean
 */
-export const _NOT_CHAINED_ = 0;
-export const _CHAINED_AFTER_ = 1;
-export const _CHAINED_BEFORE_ = 2;
+export const _NOT_CHAINED_ = 0; // eslint-disable-line
+export const _CHAINED_AFTER_ = 1; // eslint-disable-line
+export const _CHAINED_BEFORE_ = 2; // eslint-disable-line
 export function chainedNodes(node1: Node, node2: Node): number {
 	if (node1 === node2) {
 		return _NOT_CHAINED_;
@@ -1140,8 +1117,8 @@ export function chainNodeChainBetween(
 			  NodeType | PhantomNode | PhantomChain
 		fromPast: Boolean
 */
-export const _FROM_PAST_ = true;
-export const _FROM_FUTURE_ = false;
+export const _FROM_PAST_ = true; // eslint-disable-line
+export const _FROM_FUTURE_ = false; // eslint-disable-line
 export function rechainNode(node: mixed, fromPast: boolean): void {
 	const n = node;
 
@@ -1565,8 +1542,6 @@ export function createNewBranchAt(type: Array<number>, at: number): Node {
 			- first: Node | null
 			- second: Node | null
 */
-export const _CUT_ABOVE_ = true; // Always cut above
-export const _CUT_BELOW_ = false; // Unused
 export function shatter(leaf: Leaf, stop: Node): Object {
 	const result = {
 		first: null,
@@ -1658,8 +1633,8 @@ export function shatter(leaf: Leaf, stop: Node): Object {
 		newLeaf: Leaf object
 		targetLeaf: Leaf object
 */
-export const _CHAIN_AFTER_ = true;
-export const _CHAIN_BEFORE_ = false;
+export const _CHAIN_AFTER_ = true; // eslint-disable-line
+export const _CHAIN_BEFORE_ = false; // eslint-disable-line
 export function chainLeaf(newLeaf: Leaf, targetLeaf: Leaf): void {
 	const n = newLeaf;
 
@@ -2077,6 +2052,12 @@ export function rechainLeaf(leaf: mixed, fromPast: boolean): void {
 		- consume() will mark a consumed dirty Leaf so that autoMergeLeaf won't be called on
 		  Leaf.
 		- consume() will not check if a Leaf has already been consumed or not. It's not its job.
+
+		# PAS
+		- consume() will produce an incrase of offset.
+			- If leaf is in PAS, its new range will be [r0 + increase, r1 + increase].
+			- If the consumed is in PAS, replace PAS.start/end.leaf with leaf. The new range
+			  will be [r0 + increase, r1 + increase].
 	@ params
 		leaf: Leaf object
 		up: Boolean
@@ -2085,14 +2066,16 @@ export function rechainLeaf(leaf: mixed, fromPast: boolean): void {
 			- true: successfully consumed
 			- false: unable to consume
 */
-export const _TRAVERSE_UP_ = true;
-export const _TRAVERSE_DOWN_ = false;
+export const _TRAVERSE_UP_ = true; // eslint-disable-line
+export const _TRAVERSE_DOWN_ = false; // eslint-disable-line
 export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 	if (leaf.new === false) {
 		throw new Error('Only new Leaf can consume other Leaves.');
 	}
 
 	const l = leaf;
+	// pas
+	let oi = 0; // offset increase
 
 	if (up) {
 		const { prevLeaf } = l;
@@ -2110,8 +2093,12 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 				l.text = prevLeaf.text;
 				// If current Leaf is zero-width, adopt consumed Leaf's styles
 				copyLeafStyles(l, prevLeaf);
+				// pas
+				oi = isZeroLeaf(prevLeaf) ? 0 : prevLeaf.text.length;
 			} else if (!isZeroLeaf(prevLeaf)) {
 				l.text = `${prevLeaf.text}${l.text}`;
+				// pas
+				oi = prevLeaf.text.length;
 			}
 			// Get prevLeaf.prevLeaf
 			const prevPrevLeaf = prevLeaf.prevLeaf;
@@ -2131,6 +2118,23 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 				// If not old, check if consumed attribute exists
 				// It it does, mark consumed Leaf
 				prevLeaf.consumed = true;
+			}
+			// PAS
+			if (PostActionSelection.start) {
+				if (PostActionSelection.start.leaf === leaf) {
+					PostActionSelection.start.range[0] += oi;
+					PostActionSelection.start.range[1] += oi;
+				} else if (PostActionSelection.start.leaf === prevLeaf) {
+					PostActionSelection.start.leaf = leaf;
+				}
+			}
+			if (PostActionSelection.end) {
+				if (PostActionSelection.end.leaf === leaf) {
+					PostActionSelection.end.range[0] += oi;
+					PostActionSelection.end.range[1] += oi;
+				} else if (PostActionSelection.end.leaf === prevLeaf) {
+					PostActionSelection.end.leaf = leaf;
+				}
 			}
 			// Consumed successfully
 			return true;
@@ -2152,8 +2156,12 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 				l.text = nextLeaf.text;
 				// If current Leaf is zero-width, adopt consumed Leaf's styles
 				copyLeafStyles(l, nextLeaf);
+				// pas
+				oi = 0;
 			} else if (!isZeroLeaf(nextLeaf)) {
 				l.text = `${l.text}${nextLeaf.text}`;
+				// pas
+				oi = l.text.length;
 			}
 			// Get nextLeaf.nextLeaf
 			const nextNextLeaf = nextLeaf.nextLeaf;
@@ -2170,6 +2178,21 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 				// If not old, check if consumed attribute exists
 				// It it does, mark consumed Leaf
 				nextLeaf.consumed = true;
+			}
+			// PAS
+			if (PostActionSelection.start) {
+				if (PostActionSelection.start.leaf === nextLeaf) {
+					PostActionSelection.start.leaf = leaf;
+					PostActionSelection.start.range[0] += oi;
+					PostActionSelection.start.range[1] += oi;
+				}
+			}
+			if (PostActionSelection.end) {
+				if (PostActionSelection.end.leaf === nextLeaf) {
+					PostActionSelection.start.leaf = leaf;
+					PostActionSelection.end.range[0] += oi;
+					PostActionSelection.end.range[1] += oi;
+				}
 			}
 			// Consumed successfully
 			return true;
@@ -2538,7 +2561,6 @@ export function mergeLeafTexts(leafText: LeafText, targetLeafText: LeafText): bo
 	applyNodesStyle
 	copyBranchText
 	copyFromClipboard
-	applyCaretStyle
 	applyLeafText
 	appendAndGrow
 	shatterAndInsert
@@ -2585,15 +2607,20 @@ export function mergeLeafTexts(leafText: LeafText, targetLeafText: LeafText): bo
 			  and set its original nextNode as the middleNext. Done.
 				- NOTE: Need to check if its parent should be removed.
 		10. Replace the EntryPoint with "before" and "middle".
+
+		# Post-Action Selection (PAS)
+		- Since applyBranchType() does not remove or create new Leaves, anchorNode and focusNode
+		  are the same as firstLC and lastLC with the same offset.
 	@ params
-		selections: Array<Leaf> - e.g. [first, last]
+		selections: Array<SelectionObject>[2]
 			- first and last are expected to be the first Leaves of their LeafChains.
 		type: Array<number>
 */
-export function applyBranchType(selections: Array<Leaf>, type: Array<number>): void {
+export function applyBranchType(selections: Array<SelectionObject>, type: Array<number>): void {
 	if (selections.length !== 2) return;
 
-	const [firstLC, lastLC] = selections;
+	const { leaf: firstLC } = selections[0];
+	const { leaf: lastLC } = selections[1];
 	let currentLC = firstLC;
 	const targetBT = getBranchTypeFromArray(type);
 	const currentBT = getBranchType(currentLC);
@@ -2764,13 +2791,16 @@ export function applyBranchType(selections: Array<Leaf>, type: Array<number>): v
 	} else {
 		chainNodeChainBetween(middle, middleEnd, before || EntryPoint.prevNode, middleNext);
 	}
+
+	// PAS
+	setPAS(copySelectionObject(selections[0]), copySelectionObject(selections[1]));
 }
 
 /*
 	applyNodeStyle:
 		- Update old NodeStyles with new NodeStyles, not replace.
 		- Only works on old Node.
-		- Unchain old NodeStyles if different. Do nothing if same .
+		- Unchain old NodeStyles if different. Do nothing if same.
 	@ param
 		Node: Node object
 		newStyles: Object
@@ -2796,14 +2826,18 @@ export function applyNodeStyle(node: Node, newStyles: Object = {}): void {
 /*
 	applyNodesStyle:
 		- Iterate though Nodes in selections and apply new NodeStyles.
+
+		# PAS
+		- No Leaves are removed or created. Same as selections.
 	@ params
-		selections: Array<Leaf>
+		selections: Array<SelectionObject>[2]
 		newStyles: Object
 */
-export function applyNodesStyle(selections: Array<Leaf>, newStyles: Object = {}): void {
+export function applyNodesStyle(selections: Array<SelectionObject>, newStyles: Object = {}): void {
 	if (selections.length !== 2) return;
 
-	const [startLC, endLC] = selections;
+	const { leaf: startLC } = selections[0];
+	const { leaf: endLC } = selections[1];
 	let currentLC = startLC;
 	while (currentLC !== null) {
 		applyNodeStyle(currentLC.parent, newStyles);
@@ -2813,6 +2847,9 @@ export function applyNodesStyle(selections: Array<Leaf>, newStyles: Object = {})
 			currentLC = getNextLeafChain(currentLC);
 		}
 	}
+
+	// PAS
+	setPAS(copySelectionObject(selections[0]), copySelectionObject(selections[1]));
 }
 
 /*
@@ -2822,20 +2859,30 @@ export function applyNodesStyle(selections: Array<Leaf>, newStyles: Object = {})
 			- If they don't, copy their entire branch structure.
 		- Attach the copied Leaf or Node to Clipboard, which like DocumentRoot, is also a
 		  RootNode.
+		- Do nothing if copying a zeroLeaf.
+		- Do nothing if selection is zero-width.
+
+		# PAS
+		- Nothing is re-rendered. Do nothing.
 	@ params
-		selections: Array<Object>
+		selections: Array<SelectionObject>[2]
 			- Object
 				- leaf: Leaf object
 				- range: Array<number>
 */
-export function copyBranchText(selections: Array<Object>): void {
+export function copyBranchText(selections: Array<SelectionObject>): void {
 	if (selections.length !== 2) return;
 
 	const [start, end] = selections;
 	const { leaf: startLeaf, range: startRange } = start;
 	const { leaf: endLeaf, range: endRange } = end;
 
+	// If selection is zero-width, do nothing.
+	if (startLeaf === endLeaf && startRange[0] === startRange[1]) return;
+
 	if (startLeaf.parent === endLeaf.parent) {
+		// If copying a zeroLeaf, do nothing.
+		if (isZeroLeaf(startLeaf)) return;
 		// Same parent -> copy the LeafChain only
 		const copy = copyLeafChain(startLeaf, endLeaf, startRange, endRange);
 		Clipboard.firstChild = copy.startLeaf;
@@ -2852,6 +2899,9 @@ export function copyBranchText(selections: Array<Object>): void {
 		Clipboard.startLeaf = copy.firstLeaf;
 		Clipboard.endLeaf = copy.lastLeaf;
 	}
+
+	// PAS
+	// Do nothing
 }
 
 /*
@@ -2887,32 +2937,18 @@ export function copyFromClipboard(): Object | null {
 }
 
 /*
-	applyCaretStyle:
-		- Simply update the attributes of CaretStyle, which is a LeafStyles object.
-		- Do not create a new object, since CaretStyle is a constant.
-	@ params
-		props: LeafStyles | Object - default: {}
-*/
-export const CaretStyle = new LeafStyles();
-export function applyCaretStyle(props: LeafStyles | Object = {}): void {
-	const cs = CaretStyle;
-	if (props.bold !== undefined) cs.bold = props.bold;
-	if (props.italic !== undefined) cs.italic = props.italic;
-	if (props.underline !== undefined) cs.underline = props.underline;
-	// Update hash
-	const b = cs.bold ? 2 ** 1 : 0;
-	const i = cs.italic ? 2 ** 2 : 0;
-	const u = cs.underline ? 2 ** 3 : 0;
-	cs.hash = b + i + u;
-}
-
-/*
 	applyLeafText:
 		- Apply text change in the same Leaf, unchain and merge LeafText when necessary.
 		- If replacement is empty and the range covers the entire Leaf, replace the Leaf
 		  with a dirty zeroLeaf.
 		- It does not handle "Delete" or "Backspace". removeAndAppend() handles them.
 		- It expects CaretStyle to be the same as the current Leaf's LeafStyles.
+
+		# PAS
+		- If Leaf is not removed, PAS is zero-width and stays in the same Leaf. Its new
+		  offset equals to (t1.length + replacement.length).
+		- If Leaf is removed, PAS is zero-width and stays in the new zeroLeaf. Offset is
+		  0. Then, reply on autoMergeLeaves() to handle PAS.
 	@ params
 		leaf: Leaf object
 		range: Array<number>
@@ -2942,6 +2978,10 @@ export function applyLeafText(leaf: Leaf, range: Array<number>, replacement: str
 		}
 		zl.consumed = false;
 		DirtyNewLeaves.push(zl);
+		// PAS
+		setPAS({ leaf: zl, range: [0, 0] }, { leaf: zl, range: [0, 0] });
+		// Auto-merge
+		autoMergeDirtyLeaves();
 		// Done
 		return;
 	}
@@ -2977,6 +3017,15 @@ export function applyLeafText(leaf: Leaf, range: Array<number>, replacement: str
 	}
 
 	if (!merged) unchainLeaf(lt, _PAST_STACK_);
+
+	// PAS
+	setPAS({
+		leaf,
+		range: [t1.length + replacement.length, t1.length + replacement.length]
+	}, {
+		leaf,
+		range: [t1.length + replacement.length, t1.length + replacement.length]
+	});
 }
 
 /*
@@ -3008,11 +3057,15 @@ export function applyLeafText(leaf: Leaf, range: Array<number>, replacement: str
 		11. Chain appendAfter after AppendPoint.
 		12. Chain middle between appendBefore's parent and its nextNode (could be null).
 		13. Auto-merge dirty Leaves.
+
+		# PAS
+		- PAS is zero-width at the end of AppendPoint. Then reply on autoMergeLeaves()
+		  to handle PAS.
 	@ params
 		same as applyBranchText (no flag)
 */
 export function appendAndGrow(
-	selections: Array<Object>,
+	selections: Array<SelectionObject>,
 	replacement: string | LeafChain | NodeChain
 ): void {
 	const IS_STRING = 0;
@@ -3162,6 +3215,10 @@ export function appendAndGrow(
 		chainNodeChainBetween(middleStart, middleEnd, GrowParent, GrowParent.nextNode);
 	}
 
+	// PAS
+	const os = isZeroLeaf(AppendPoint) ? 0 : AppendPoint.text.length;
+	setPAS({ leaf: AppendPoint, range: [os, os] }, { leaf: AppendPoint,	range: [os, os]	});
+
 	// Step 13
 	autoMergeDirtyLeaves();
 }
@@ -3201,10 +3258,14 @@ export function appendAndGrow(
 		   	- If ShatterPoint is not null, and if "first" is null, set "first" to be the
 		   	  prevNode of "second". Chain replacement "NodeChain" between "first" and "second".
 		8. Auto-merge dirty Leaves.
+
+		# PAS
+		- PAS is zero-width in the last Leaf in replacement. Offset is its text.length or 0, if
+		  the last Leaf is zeroLeaf. Then reply on autoMergeLeaves to handle PAS.
 	@ params
 		same as applyBranchText (no flag)
 */
-export function shatterAndInsert(selections: Array<Object>, replacement: NodeChain): void {
+export function shatterAndInsert(selections: Array<SelectionObject>, replacement: NodeChain): void {
 	// Step 1
 	const { leaf: startLeaf, range: startRange } = selections[0];
 	const { leaf: endLeaf, range: endRange } = selections[1];
@@ -3370,6 +3431,32 @@ export function shatterAndInsert(selections: Array<Object>, replacement: NodeCha
 		}
 	}
 
+	// PAS
+	// Find the last leaf in replacement.endNode
+	let ll = replacement.endNode.firstChild;
+	while (ll !== null) {
+		if (instanceOf(ll, 'Leaf')) {
+			if (ll.nextLeaf === null) {
+				break;
+			}
+			ll = ll.nextLeaf;
+		} else if (ll.nextNode === null) {
+			ll = ll.firstChild;
+		} else {
+			ll = ll.nextNode;
+		}
+	}
+	// Set PAS in the last Leaf
+	if (ll) {
+		setPAS({
+			leaf: ll,
+			range: isZeroLeaf(ll) ? [0, 0] : [ll.text.length, ll.text.length]
+		}, {
+			leaf: ll,
+			range: isZeroLeaf(ll) ? [0, 0] : [ll.text.length, ll.text.length]
+		});
+	}
+
 	// Step 8
 	autoMergeDirtyLeaves();
 }
@@ -3413,14 +3500,22 @@ export function shatterAndInsert(selections: Array<Object>, replacement: NodeCha
 			  Then replace startLeaf with appendBefore.
 				- If not, chain appendAfter after appendBefore and replace startLeaf with it.
 		7. Auto-merge dirty leaves.
+
+		# PAS
+		- PAS is zero-width.
+			- If flag is "Newline", PAS is at the beginning of appendAfter.
+			- If flag is "Backspace", PAS is at the end of the Leaf before appendAfter.
+			- If flag is "Delete", PAS is at the end of the Leaf before either nextCopy or
+			  appendAfter.
+		- Then rely on autoMergeLeaves() to handle PAS.
 	@ params
 		same as applyBranchText (no replacement - it's empty string)
 */
-export const _DELETE_ = 1;
-export const _BACKSPACE_ = 2;
-export const _NEWLINE_ = 3;
+export const _DELETE_ = 1; // eslint-disable-line
+export const _BACKSPACE_ = 2; // eslint-disable-line
+export const _NEWLINE_ = 3; // eslint-disable-line
 export function removeAndAppend(
-	selections: Array<Object>,
+	selections: Array<SelectionObject>,
 	flag: number | null = null
 ): void {
 	// Step 1
@@ -3441,6 +3536,10 @@ export function removeAndAppend(
 	appendAfter.consumed = false;
 	DirtyNewLeaves.push(appendAfter);
 
+	// pas
+	let pasl = null; // pasl is the Leaf for PAS
+	let os = null; // os is the offset for PAS
+
 	// Step 4
 	if (startLeaf === endLeaf) {
 		if (isZeroLeaf(startLeaf) && flag === _NEWLINE_) {
@@ -3451,6 +3550,9 @@ export function removeAndAppend(
 			copyLeafStyles(zl, startLeaf);
 			setParentLink(zl, nn);
 			chainNodeChainBetween(nn, nn, startLeaf.parent, startLeaf.parent.nextNode);
+			// pas
+			pasl = zl;
+			os = 0;
 		} else if (!isZeroLeaf(startLeaf) && flag === _NEWLINE_) {
 			// 4.2
 			const p = startLeaf.parent;
@@ -3470,6 +3572,9 @@ export function removeAndAppend(
 			copyNodeStyles(nn, p);
 			setParentLink(appendAfter, nn);
 			chainNodeChainBetween(nn, nn, p, p.nextNode);
+			// pas
+			pasl = appendAfter;
+			os = 0;
 		} else if (startRange[0] === startRange[1]) {
 			// 4.3
 			// If selection is zero-width
@@ -3480,24 +3585,32 @@ export function removeAndAppend(
 						const prevLC = getPrevLeafChain(startLeaf);
 						if (prevLC !== null) {
 							removeNode(startLeaf.parent);
+							// Get the last Leaf of the previous LeafChain
+							let l = prevLC;
+							while (l.nextLeaf !== null) {
+								l = l.nextLeaf;
+							}
 							if (!isZeroLeaf(startLeaf)) {
-								// Get the last Leaf of the previous LeafChain
-								let l = prevLC;
-								while (l.nextLeaf !== null) {
-									l = l.nextLeaf;
-								}
 								// Chain appendAfter after l
 								chainLeaf(appendAfter, l);
 							}
+							// pas
+							pasl = l;
+							os = isZeroLeaf(l) ? 0 : l.text.length;
+						} else {
+							// Nothing to "Backspace"
+							return;
 						}
 					} else {
 						const prevL = startLeaf.prevLeaf;
 						const len = prevL.text.length;
 						applyLeafText(prevL, [len - 1, len], '');
+						return;
 					}
 				} else {
 					// Not at the beginning of the Leaf
 					applyLeafText(startLeaf, [startRange[0] - 1, startRange[1]], '');
+					return;
 				}
 			} else if (flag === _DELETE_) {
 				if (startRange[0] === startLeaf.text.length || isZeroLeaf(startLeaf)) {
@@ -3507,6 +3620,9 @@ export function removeAndAppend(
 						if (nextLC !== null) {
 							if (isZeroLeaf(startLeaf)) {
 								removeNode(startLeaf.parent);
+								// pas
+								pasl = nextLC;
+								os = 0;
 							} else {
 								const { startLeaf: nextCopy } = copyLeafChain(nextLC, null, null, null);
 								nextCopy.consumed = false;
@@ -3515,20 +3631,29 @@ export function removeAndAppend(
 								removeNode(nextLC.parent);
 								// Chain nextCopy after startLeaf
 								chainLeaf(nextCopy, startLeaf);
+								// pas
+								pasl = startLeaf;
+								os = isZeroLeaf(startLeaf) ? 0 : startLeaf.text.length;
 							}
+						} else {
+							// Nothing to "Delete"
+							return;
 						}
 					} else {
 						const nextL = startLeaf.nextLeaf;
 						applyLeafText(nextL, [0, 1], '');
+						return;
 					}
 				} else {
 					// Not at the end of the Leaf
 					applyLeafText(startLeaf, [startRange[0], startRange[1] + 1], '');
+					return;
 				}
 			}
 		} else if (flag !== _NEWLINE_) {
 			// 4.4
 			applyLeafText(startLeaf, startRange, '');
+			return;
 		}
 	} else {
 		// Step 5 & 6
@@ -3564,6 +3689,9 @@ export function removeAndAppend(
 			copyNodeStyles(nn, p);
 			setParentLink(appendAfter, nn);
 			chainNodeChainBetween(nn, nn, p, p.nextNode);
+			// pas
+			pasl = appendAfter;
+			os = 0;
 		} else {
 			chainLeaf(appendAfter, appendBefore);
 			// Replace startLeaf
@@ -3578,8 +3706,14 @@ export function removeAndAppend(
 			} else {
 				chainLeaf(appendBefore, prevStart);
 			}
+			// pas
+			pasl = appendBefore;
+			os = isZeroLeaf(appendBefore) ? 0 : appendBefore.text.length;
 		}
 	}
+
+	// PAS
+	setPAS({ leaf: pasl, range: [os, os] }, { leaf: pasl, range: [os, os] });
 
 	// Step 7
 	autoMergeDirtyLeaves();
@@ -3601,14 +3735,14 @@ export function removeAndAppend(
 			3. Remove + Append (removeAndAppend)
 				- Replacement is empty "pure string".
 	@ params
-		selections: Array<Object>
+		selections: Array<SelectionObject>[2]
 			- leaf: Leaf object
 			- range: Array<number>
 		replacement: String | LeafChain | NodeChain
 		flag: Number | null
 */
 export function applyBranchText(
-	selections: Array<Object>,
+	selections: Array<SelectionObject>,
 	replacement: string | LeafChain | NodeChain,
 	flag: number | null = null
 ): void {
@@ -3676,6 +3810,7 @@ export function applyBranchText(
 /*
 	applyLeafStyle:
 		1. Throw error if leaf is new.
+			- Do nothing if the leaf is non-text.
 		2. Trim range.
 			- If range is zero-width, do nothing, unless the leaf is a zeroLeaf.
 				- User Action should call applyCaretStyle() if selection is zero-width, or
@@ -3688,6 +3823,10 @@ export function applyBranchText(
 		6. Create two new Leaves using the left side and right side of the range, as "before"
 		   and "after". Chain them with middle if they are not zeroLeaves. They are dirty.
 		7. Replace leaf with the new LeafChain.
+
+		# PAS
+		- If the Leaf is in PAS and it has been unchained (middle exists). PAS is the entire
+		  middle.
 	@ params
 		leaf: Leaf object
 		range: Array object - default: [0, 0]
@@ -3705,6 +3844,7 @@ export function applyLeafStyle(
 	if (leaf.new === true) {
 		throw new Error('applyLeafStyle() only works on old Leaves.');
 	}
+	if (!isTextLeaf(leaf)) return;
 
 	// Step 2
 	const r = trimRange(leaf, range || [0, leaf.text.length]);
@@ -3725,6 +3865,16 @@ export function applyLeafStyle(
 	});
 	middle.consumed = false;
 	DirtyNewLeaves.push(middle);
+
+	// PAS
+	if (PostActionSelection.start !== null && PostActionSelection.start.leaf === leaf) {
+		PostActionSelection.start.leaf = middle;
+		PostActionSelection.start.range = [0, isZeroLeaf(middle) ? 0 : middle.text.length];
+	}
+	if (PostActionSelection.end !== null && PostActionSelection.end.leaf === leaf) {
+		PostActionSelection.end.leaf = middle;
+		PostActionSelection.end.range = [0, isZeroLeaf(middle) ? 0 : middle.text.length];
+	}
 
 	// Step 5
 	if (isZeroLeaf(leaf)) {
@@ -3778,17 +3928,24 @@ export function applyLeafStyle(
 		- Apply new styles to a selection of Leaves.
 		- Skip autoMergeLeaf() on dirty Leaves already consumed.
 			- Delete consumed attribute on dirty Leaves after autoMergeLeaf().
+
+		# PAS
+		- PAS is the same as selections. Then rely on applyLeafStyle() and autoMergeLeaves()
+		  to handle PAS.
 	@ params
-		selections: Array<Object>
+		selections: Array<SelectionObject>[2]
 			- leaf: leaf Object
 			- range: Array<number>
 		newStyles: Object (LeafStyles props)
 */
-export function applyLeavesStyle(selections: Array<Object>, newStyles: Object): void {
+export function applyLeavesStyle(selections: Array<SelectionObject>, newStyles: Object): void {
 	if (selections.length !== 2) return;
 	// Iterate through Leaves in selections, and call applyLeafStyle on each.
 	const { leaf: startLeaf, range: startRange } = selections[0];
 	const { leaf: endLeaf, range: endRange } = selections[1];
+
+	// PAS
+	setPAS(copySelectionObject(selections[0]), copySelectionObject(selections[1]));
 
 	let currentL = null;
 	let nextL = startLeaf;
@@ -3829,34 +3986,112 @@ export function applyLeavesStyle(selections: Array<Object>, newStyles: Object): 
 	undo:
 		- If past stack is empty, do nothing
 		- Else pop
+		- Copy pastStep's bas and pas to TempHistoryFutureStep
 		- Iterate
 		- Rechain
+		- Restore bas
 */
 export function undo(): void {
 	if (History.stackPast.length === 0) return;
+	// Pop
 	const pastStep = History.pop(_FROM_PAST_);
+	// Copy pastStep's bas and pas to TempHistoryFutureStep
+	copyBlankSelection(TempHistoryFutureStep.bas, pastStep.bas);
+	copyBlankSelection(TempHistoryFutureStep.pas, pastStep.pas);
 	// Iterate through pastStep
 	while (pastStep.stack.length > 0) {
 		const element = pastStep.pop();
 		rechainLeaf(element, _FROM_PAST_);
 		rechainNode(element, _FROM_PAST_);
 	}
+	// Restore pastStep's BAS as PAS
+	copyBlankSelection(PostActionSelection, pastStep.bas);
 }
 
 /*
 	redo:
 		- If future stack is empty, do nothing
-		- Else pop
+		- Else set TempHistoryPastStep.redo to true
+		- Pop
+		- Copy futureStep's bas and pas to TempHistoryPastStep
 		- Iterate
 		- Rechain
+		- Restore pas
 */
 export function redo(): void {
 	if (History.stackFuture.length === 0) return;
+	// Set TempHistoryPastStep.redo to true
+	TempHistoryPastStep.redo = true;
+	// Pop
 	const futureStep = History.pop(_FROM_FUTURE_);
+	// Copy futureStep's bas and pas to TempHistoryPastStep
+	copyBlankSelection(TempHistoryPastStep.bas, futureStep.bas);
+	copyBlankSelection(TempHistoryPastStep.pas, futureStep.pas);
 	// Iterate through futureStep
 	while (futureStep.stack.length > 0) {
 		const element = futureStep.pop();
 		rechainLeaf(element, _FROM_FUTURE_);
 		rechainNode(element, _FROM_FUTURE_);
 	}
+	// Restore futureStep's PAS as PAS
+	copyBlankSelection(PostActionSelection, futureStep.pas);
+}
+
+//= Complete Action Ops
+
+/*
+	In this section, Action Ops will be wrapped with Selection, History and Render Ops
+	to perform the "Complete Action".
+
+	Example:
+
+	Complete Action Op for action A:
+		1. If not CONTINUOUS_ACTION
+			- call readyTempHistorySteps().
+			- Save current BAS to TempHistoryPastStep.
+		2. Prepare BAS for action (Split BAS if necessary).
+		3. Perform the action on BAS.
+
+		If TempHistoryPastStep is not empty:
+
+		4. Save current PAS to TempHistoryPastStep.
+		5. Set CONTINUOUS_ACTION to true/false.
+		6. Render.
+		7. Display PAS.
+*/
+
+/*
+	Complete undo():
+		1. Call readyTempHistorySteps().
+		2. Call undo().
+		3. No need to save PAS to TempHistoryFutureStep, whose pas is copied from pastStep.
+		4. CONTINUOUS_ACTION is false.
+		5. Render.
+		6. Display PAS.
+*/
+export const ACTION_UNDO = 1;
+export function undo$COMPLETE(): void {
+	readyTempHistorySteps();
+	undo();
+	BlankFlags.CONTINUOUS_ACTION = false;
+	// Render()
+	setWindowSelection(PostActionSelection);
+}
+
+/*
+	Complete redo():
+		1. Call readyTempHistorySteps().
+		2. Call redo().
+		3. No need to save PAS to TempHistoryPastStep, whose pas is copied from futureStep.
+		4. CONTINUOUS_ACTION is false.
+		5. Render.
+		6. Display PAS.
+*/
+export const ACTION_REDO = 2;
+export function redo$COMPLETE(): void {
+	readyTempHistorySteps();
+	redo();
+	BlankFlags.CONTINUOUS_ACTION = false;
+	// Render()
+	setWindowSelection(PostActionSelection);
 }

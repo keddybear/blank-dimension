@@ -1,8 +1,7 @@
 /* eslint-disable */
-import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText } from '../leaf';
+import { Leaf, isZeroLeaf, LeafStyles, NullLeaf, LeafChain, LeafText } from '../leaf';
 import { History, BlankHistoryStep } from '../history';
 import {
-	isZeroLeaf,
 	_PAST_STACK_,
 	_FUTURE_STACK_,
 	TempHistoryPastStep,
@@ -24,7 +23,6 @@ import {
 	autoMergeLeaf,
 	readyHistoryStep,
 	readyTempHistorySteps,
-	copyHistoryStep,
 	mergeLeafTexts
 } from '../integration';
 

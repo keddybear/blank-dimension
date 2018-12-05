@@ -1,5 +1,5 @@
 // @flow
-import { Node } from './node';
+import { Node, BlankCounter } from './node';
 
 export class LeafStyles {
 	/*
@@ -49,50 +49,81 @@ export class LeafStyles {
 	}
 }
 
+// This is the current LeafStyles on Caret.
+export const CaretStyle = new LeafStyles();
+
+/*
+	applyCaretStyle:
+		- Simply update the attributes of CaretStyle, which is a LeafStyles object.
+		- Do not create a new object, since CaretStyle is a constant.
+	@ params
+		props: LeafStyles | Object - default: {}
+*/
+export function applyCaretStyle(props: LeafStyles | Object = {}): void {
+	const cs = CaretStyle;
+	if (props.bold !== undefined) cs.bold = props.bold;
+	if (props.italic !== undefined) cs.italic = props.italic;
+	if (props.underline !== undefined) cs.underline = props.underline;
+	// Update hash
+	const b = cs.bold ? 2 ** 1 : 0;
+	const i = cs.italic ? 2 ** 2 : 0;
+	const u = cs.underline ? 2 ** 3 : 0;
+	cs.hash = b + i + u;
+}
+
+// DOM Element attributes
+export const LeafDataAttributes = {
+	// LEAF_KEY_ATTR: Attached to the root Element when rendering a Leaf. Value: Leaf.id
+	LEAF_KEY_ATTR: 'data-leaf-key',
+	LEAF_KEY_CAMEL: 'leafKey',
+	// LEAF_TEXT_ATTR: Attached to the span Element that renders a Leaf's text. Value: ''
+	LEAF_TEXT_ATTR: 'data-leaf-text',
+	LEAF_TEXT_CAMEL: 'leafText',
+	// LEAF_CONTENT_ATTR: Attached to the root Element that wraps the content of a
+	// non-text Leaf. Value: ''
+	LEAF_CONTENT_ATTR: 'data-leaf-content',
+	LEAF_CONTENT_CAMEL: 'leafContent'
+};
+
+
 export class Leaf {
 	/*
 		@ attributes
 		text: String - default: '\u200b' (zero-width space)
 		styles: LeafStyles object - default: new LeafStyles()
+		type: number - default: 0 (Leaf is text)
 		prevLeaf: Leaf object - default: null
 		nextLeaf: Leaf object - default: null
 		new: Boolean - default true
 		consumed: Boolean | null - default: null
 		parent: Node object - default: null
 		Leaf: Boolean - default: true
+		id: number
 	*/
 	text: string;
 	styles: LeafStyles;
+	type: number;
 	prevLeaf: null | Leaf;
 	nextLeaf: null | Leaf;
 	new: boolean;
 	consumed: boolean | null;
 	parent: null | Node;
 	Leaf: boolean;
-
-	/*
-		@ methods
-		applyStyle
-		autoMerge
-
-		@ util
-		trimRange
-	*/
+	id: number; // unique id
 
 	/*
 		constructor
 		@ params
 			props: Object - default: {}
-				- text: String (optional)
-				- styles: LeafStyles object (optional)
-				- prevLeaf: Leaf object (optional)
-				- nextLeaf: Leaf object (optional)
+				- attributes (optional)
 	*/
 	constructor(props: Object = {}) {
-		this.text = props.text || '\u200b';
+		this.text = props.text || '\u200b'; // In HTML, zero-width char is &#65279;
 		this.styles = props.styles || new LeafStyles();
 		this.prevLeaf = props.prevLeaf || null;
 		this.nextLeaf = props.nextLeaf || null;
+		// By default, Leaf is a text Leaf.
+		this.type = props.type || 0;
 		// When created, Leaf's parent is always null. Manually assign this.
 		// When assigned, every Leaf in the chain should have the same parent.
 		this.parent = null;
@@ -107,7 +138,34 @@ export class Leaf {
 
 		// Identity check
 		this.Leaf = true;
+
+		// Id
+		this.id = BlankCounter.get();
 	}
+}
+
+/*
+	isZeroLeaf:
+		- Check if a Leaf's text is only zero-width space.
+	@ params
+		leaf: Leaf object
+	@ return
+		Boolean
+*/
+export function isZeroLeaf(leaf: Leaf): boolean {
+	return leaf.text === '\u200b';
+}
+
+/*
+	isTextLeaf:
+		- Check if a Leaf is a text Leaf.
+	@ params
+		leaf: Leaf object
+	@ return
+		Boolean
+*/
+export function isTextLeaf(leaf: Leaf): boolean {
+	return leaf.type === 0;
 }
 
 export class NullLeaf {

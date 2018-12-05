@@ -1,12 +1,11 @@
 /* eslint-disable */
 import { Node, DocumentRoot } from '../node';
-import { Leaf, LeafStyles, NullLeaf, LeafChain, ParentLink } from '../leaf';
-import { History, BlankHistoryStep } from '../history';
+import { Leaf, isZeroLeaf, LeafStyles, NullLeaf, LeafChain, ParentLink } from '../leaf';
+import { History, BlankHistoryStep, copyHistoryStep } from '../history';
 import {
 	sameLeafStyles,
 	setLeafStyles,
 	copyLeafStyles,
-	isZeroLeaf,
 	trimRange,
 	destroyLeaf,
 	unchainLeaf,
@@ -33,12 +32,10 @@ import {
 	DirtyNewLeaves,
 	autoMergeLeaf,
 	autoMergeDirtyLeaves,
-	copyHistoryStep,
 	readyHistoryStep,
 	readyTempHistorySteps,
 	undo,
-	redo,
-	_REDO_
+	redo
 } from '../integration';
 
 const { expect } = require('chai');
@@ -609,7 +606,7 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(History.stackFuture.length).to.equal(1);
 
 			// Redo (ready history steps and immediately push past step after redo())
-			readyTempHistorySteps(_REDO_);
+			readyTempHistorySteps();
 			redo();
 			History.push(copyHistoryStep(TempHistoryPastStep), true);
 			// start-l1-end
@@ -671,7 +668,7 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(lc.nextLeaf).to.equal(end);
 
 			// Redo (ready history steps and immediately push past step after redo())
-			readyTempHistorySteps(_REDO_);
+			readyTempHistorySteps();
 			redo();
 			History.push(copyHistoryStep(TempHistoryPastStep), true);
 			// start-l2-l3-end
@@ -979,7 +976,7 @@ describe('Leaf chaining & advanced operations', function() {
 			expect(end.prevLeaf).to.equal(l3);
 
 			// Redo (ready history steps and immediately push past step after redo())
-			readyTempHistorySteps(_REDO_);
+			readyTempHistorySteps();
 			redo();
 			History.push(copyHistoryStep(TempHistoryPastStep), true);
 
@@ -1447,7 +1444,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 		it('Redo', function(done) {
 			// Redo
-			readyTempHistorySteps(_REDO_);
+			readyTempHistorySteps();
 			redo();
 
 			let lc = n2.firstChild;
@@ -1468,7 +1465,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 		it('Redo', function(done) {
 			// Redo
-			readyTempHistorySteps(_REDO_);
+			readyTempHistorySteps();
 			redo();
 
 			let lc = n3.firstChild;
@@ -1494,7 +1491,7 @@ describe('Leaf chaining & advanced operations', function() {
 
 		it('Redo', function(done) {
 			// Redo
-			readyTempHistorySteps(_REDO_);
+			readyTempHistorySteps();
 			redo();
 
 			let cn = n4;
