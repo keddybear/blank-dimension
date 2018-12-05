@@ -1,10 +1,9 @@
 /* eslint-disable */
 import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../node';
-import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from '../leaf';
+import { Leaf, isZeroLeaf, LeafStyles, CaretStyle, applyCaretStyle, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from '../leaf';
 import { History, BlankHistoryStep } from '../history';
+import { instanceOf } from '../utils';
 import {
-	instanceOf,
-	isZeroLeaf,
 	getPrevLeafChain,
 	sameNodeStyles,
 	chainNode,
@@ -13,7 +12,6 @@ import {
 	createNewBranchAt,
 	_PAST_STACK_,
 	_FUTURE_STACK_,
-	_REDO_,
 	TempHistoryPastStep,
 	TempHistoryFutureStep,
 	_NOT_CHAINED_,
@@ -22,7 +20,6 @@ import {
 	chainLeaf,
 	readyHistoryStep,
 	readyTempHistorySteps,
-	copyHistoryStep,
 	setParentLink,
 	autoMergeDirtyLeaves,
 	undo,
@@ -33,8 +30,6 @@ import {
 	copyNodeChain,
 	copyBranchText,
 	copyFromClipboard,
-	applyCaretStyle,
-	CaretStyle,
 	setLeafStyles,
 	DirtyNewLeaves,
 	applyLeafText,
@@ -1232,7 +1227,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 		});
 
-		describe('Remove the entire Leaf (between two Leaves of same styles)', function(done) {
+		describe('Remove the entire Leaf (between two Leaves of same styles)', function() {
 
 			const l1 = new Leaf({ text: 'This is a ' });
 			const l2 = new Leaf({
@@ -1277,8 +1272,11 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				const l = n1.firstChild;
 				expect(l.new).to.be.true;
+				l.new = false;
 				expect(l.text).to.equal('This is a Leaf.');
 				expect(l.styles.bold).to.be.false;
+				expect(l.prevLeaf).to.equal(null);
+				expect(l.nextLeaf).to.equal(null);
 
 				let pastStep = TempHistoryPastStep.stack;
 				expect(pastStep.length).to.equal(3);
@@ -1505,7 +1503,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 				// Redo
 				expect(History.stackPast.length).to.equal(0);
 				expect(History.stackFuture.length).to.equal(1);
-				readyTempHistorySteps(_REDO_);
+				readyTempHistorySteps();
 				expect(History.stackPast.length).to.equal(0);
 				expect(History.stackFuture.length).to.equal(2);
 				redo();
@@ -1519,7 +1517,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 				// Redo
 				expect(History.stackPast.length).to.equal(0);
 				expect(History.stackFuture.length).to.equal(1);
-				readyTempHistorySteps(_REDO_);
+				readyTempHistorySteps();
 				expect(History.stackPast.length).to.equal(1);
 				expect(History.stackFuture.length).to.equal(1);
 				redo();
@@ -1591,7 +1589,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 			it('Redo', function(done) {
 				// Redo
-				readyTempHistorySteps(_REDO_);
+				readyTempHistorySteps();
 				redo();
 
 				expect(l1.text).to.equal('Hello darkness!');
@@ -1677,7 +1675,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 			it('Redo', function(done) {
 				// Redo
-				readyTempHistorySteps(_REDO_);
+				readyTempHistorySteps();
 				redo();
 
 				let cl = n1.firstChild;
@@ -1793,7 +1791,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 			it('Redo', function(done) {
 				// Redo
-				readyTempHistorySteps(_REDO_);
+				readyTempHistorySteps();
 				redo();
 
 				let cn = n1;
@@ -1929,7 +1927,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 			it('Redo', function(done) {
 				// Redo
-				readyTempHistorySteps(_REDO_);
+				readyTempHistorySteps();
 				redo();
 
 				let cn = n1;
@@ -2109,7 +2107,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 			it('Redo', function(done) {
 				// Redo
-				readyTempHistorySteps(_REDO_);
+				readyTempHistorySteps();
 				redo();
 
 				let cn = n1;
@@ -2288,7 +2286,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 			it('Redo', function(done) {
 				// Redo
-				readyTempHistorySteps(_REDO_);
+				readyTempHistorySteps();
 				redo();
 
 				let cn = n1;
@@ -2445,7 +2443,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -2602,7 +2600,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -2758,7 +2756,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -2914,7 +2912,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -3087,7 +3085,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -3247,7 +3245,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -3427,7 +3425,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -3592,7 +3590,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -3864,7 +3862,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -3889,7 +3887,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -3920,7 +3918,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -4178,7 +4176,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n4;
@@ -4196,7 +4194,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n2;
@@ -4210,7 +4208,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -4467,7 +4465,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n4;
@@ -4485,7 +4483,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n4;
@@ -4505,7 +4503,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -4677,7 +4675,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -4695,7 +4693,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -4825,7 +4823,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -5034,7 +5032,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -5057,7 +5055,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -5392,7 +5390,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -5427,7 +5425,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -5468,7 +5466,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -5603,7 +5601,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -5764,7 +5762,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -5955,7 +5953,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -6135,7 +6133,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -6303,7 +6301,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = DocumentRoot.firstChild;
@@ -6441,7 +6439,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;
@@ -6690,7 +6688,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n4;
@@ -6708,7 +6706,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n2;
@@ -6722,7 +6720,7 @@ describe('Node Action Ops w/ undo and redo', function() {
 
 				it('Redo', function(done) {
 					// Redo
-					readyTempHistorySteps(_REDO_);
+					readyTempHistorySteps();
 					redo();
 
 					let cn = n1;

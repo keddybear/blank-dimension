@@ -1,18 +1,22 @@
 // @flow
-/*
-	NOTE: Inline class doesn't exist yet.
-		  Refactor BlankHistory & BlankHistoryStep to work with Inline.
-*/
+import { BlankSelection, _MANUAL_ } from './selection';
+
 export class BlankHistoryStep {
 	/*
 		@ attributes
 		stack: Array<mixed> - default: []
 		past: Boolean - default: false
 		future: Boolean - default: false
+		redo: Boolean - default: false
+		bas: BlankSelection - default: null
+		pas: BlankSelection - default: null
 	*/
 	stack: Array<mixed>;
 	past: boolean;
 	future: boolean;
+	redo: boolean;
+	bas: BlankSelection | null;
+	pas: BlankSelection | null;
 
 	/*
 		@ methods
@@ -25,6 +29,9 @@ export class BlankHistoryStep {
 	*/
 	constructor(past: boolean) {
 		this.stack = [];
+		this.redo = false;
+		this.bas = new BlankSelection(_MANUAL_);
+		this.pas = new BlankSelection(_MANUAL_);
 
 		// past and future cannot be mutated
 		this.past = past;
@@ -49,20 +56,48 @@ export class BlankHistoryStep {
 
 	/*
 		clear:
-			Empty the stack by setting its length to 0
+			- Empty the stack by setting its length to 0.
+			- Reset everything else to default value.
 	*/
 	clear() {
 		this.stack.length = 0;
+		this.redo = false;
+		this.bas = new BlankSelection(_MANUAL_);
+		this.pas = new BlankSelection(_MANUAL_);
 	}
 
 	/*
 		detach:
-			Declare an empty array for stack. Its old stack can be referenced for reuse.
+			- Declare an empty array for stack. Its old stack can be referenced for reuse.
 	*/
 	detach() {
 		this.stack = [];
 	}
 }
+
+/*
+	copyHistoryStep:
+		- Since TempHistoryStep will be cleared before any action is performed, its stack
+		  needs to be copied before being put into the History stack.
+		- Copy the reference of the old stack and declare [] for TempHistoryStep
+		- past and future values are also copied.
+		- Return the new Step
+	@ params
+		oldStep: BlankHistoryStep
+	@ return
+		newStep: BlankHistoryStep
+*/
+export function copyHistoryStep(oldStep: BlankHistoryStep): BlankHistoryStep {
+	const newStep = new BlankHistoryStep(oldStep.past);
+	newStep.stack = oldStep.stack;
+	newStep.redo = oldStep.redo;
+	newStep.bas = oldStep.bas;
+	newStep.pas = oldStep.pas;
+	oldStep.detach();
+	return newStep;
+}
+
+const MAX_HISTORY_SIZE = 100;
 
 let BlankHistoryExist = false;
 class BlankHistory {
@@ -113,19 +148,25 @@ class BlankHistory {
 		push:
 			- Push a BlankHistoryStep into either past or future stack, depending
 			  on its past value.
-			- Clear future stack if not redo().
+			- Do not clear future stack if the pushed step is from redo().
 			- Do nothing if step is empty. (readyHistoryStep() does the same thing.)
+			- shift() if exceeding max size.
 		@ params
 			step: BlankHistoryStep
-			redo: Boolean - default: false
 	*/
-	push(step: BlankHistoryStep, redo: boolean = false): void {
+	push(step: BlankHistoryStep): void {
 		if (step.stack.length === 0) return;
 		if (step.past) {
-			if (!redo) this.stackFuture.length = 0;
+			if (!step.redo) this.stackFuture.length = 0;
 			this.stackPast.push(step);
+			if (this.stackPast.length > MAX_HISTORY_SIZE) {
+				this.stackPast.shift();
+			}
 		} else {
 			this.stackFuture.push(step);
+			if (this.stackFuture.length > MAX_HISTORY_SIZE) {
+				this.stackFuture.shift();
+			}
 		}
 	}
 
