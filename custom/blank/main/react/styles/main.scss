@@ -1,0 +1,20 @@
+.noselect {
+	-webkit-touch-callout: none; /* iOS Safari */
+	-webkit-user-select: none; /* Safari */
+	-khtml-user-select: none; /* Konqueror HTML */
+	-moz-user-select: none; /* Firefox */
+	-ms-user-select: none; /* Internet Explorer/Edge */
+	user-select: none; /* Non-prefixed version, currently supported by Chrome and Opera */
+}
+
+.blank-editor {
+	outline: none;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	-webkit-user-modify: read-write-plaintext-only;
+}
+
+.blank-container {
+	font-size: 18px;
+	line-height: 1.6em;
+}

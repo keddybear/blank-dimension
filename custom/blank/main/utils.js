@@ -38,6 +38,7 @@ export const BlankFlags = {
 		- Used to replace instanceof, which is slow according to jsPerf: https://jsperf.com/instanceof-vs-undefined
 		- It expects the variable v to have an "identity" attribute, and compares it against
 		  its identity name.
+		  	- If v is not an object, return false.
 		- Though not the fastest, this function exists for maintenance reason.
 	@ params
 		v: mixed
@@ -46,6 +47,7 @@ export const BlankFlags = {
 		bool: Boolean
 */
 export function instanceOf(v: mixed, k: string): boolean {
+	if (typeof v !== 'object') return false;
 	return v[k] !== undefined;
 }
 

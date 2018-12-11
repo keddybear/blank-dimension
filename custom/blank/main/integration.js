@@ -1,7 +1,9 @@
+// @flow
 import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from './node';
 import { Leaf, isZeroLeaf, isTextLeaf, LeafStyles, CaretStyle, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from './leaf';
 import { History, BlankHistoryStep, copyHistoryStep } from './history';
 import { type SelectionObject, copySelectionObject, BeforeActionSelection, PostActionSelection, setPAS, setWindowSelection, copyBlankSelection } from './selection';
+import { markBlankElementDirty } from './render';
 import { instanceOf, BlankFlags } from './utils';
 
 /*
@@ -179,6 +181,7 @@ export function getNextLeafChain(leaf: Leaf): Leaf | null {
 	// Go down the child and find the Leaf
 	let c = p.firstChild;
 	while (!instanceOf(c, 'Leaf')) {
+		// $FlowFixMe
 		c = c.firstChild;
 	}
 	return c;
@@ -201,6 +204,7 @@ export function findNextLeafChain(leaf: Leaf, branch: BranchType): Leaf | null {
 	const b = branch.branch;
 	// Go up the parent and find next Node
 	let p = leaf.parent;
+	// $FlowFixMe
 	while (p.nextNode === null) {
 		// No more parent
 		if (p === null) return null;
@@ -214,7 +218,9 @@ export function findNextLeafChain(leaf: Leaf, branch: BranchType): Leaf | null {
 	// Go down the child and find the Leaf
 	let c = p.firstChild;
 	while (!instanceOf(c, 'Leaf')) {
+		// $FlowFixMe
 		b.push(new NodeType(c.nodeType, c));
+		// $FlowFixMe
 		c = c.firstChild;
 	}
 	return c;
@@ -246,6 +252,7 @@ export function getPrevLeafChain(leaf: Leaf): Leaf | null {
 	let c = p.firstChild;
 	// Keep going down if there's no nextNode
 	while (!instanceOf(c, 'Leaf')) {
+		// $FlowFixMe
 		c = c.nextNode || c.firstChild;
 	}
 	return c;
@@ -337,6 +344,10 @@ export function compareBranchType(
 export function setFirstChild(parent: Node | null, child: Node | Leaf): void {
 	const p = parent;
 	if (p === null) {
+		if (instanceOf(child, 'Leaf')) {
+			throw new Error('If parent is null in setFirstChild(), child cannot be a Leaf');
+		}
+		// $FlowFixMe
 		DocumentRoot.firstChild = child;
 	} else {
 		p.firstChild = child;
@@ -613,11 +624,13 @@ export function savePAS(past: boolean): void {
 	unchainNode:
 		- Similar to unchain(), unchainNode works on Node-related objects.
 	@ params
-		node: Node | NullNode | NodeChain | NodeStyles | ParentLink | NodeType | PhantomNode
+		node: Node | NullNode | NodeChain | NodeStyles | ParentLink | NodeType |
+			  PhantomNode | PhantomChain
 		past: Boolean
 */
 export function unchainNode(
-	node: Node | NullNode | NodeChain | NodeStyles | ParentLink | NodeType | PhantomNode,
+	node: Node | NullNode | NodeChain | NodeStyles | ParentLink | NodeType |
+	PhantomNode | PhantomChain,
 	past: boolean
 ): void {
 	if (past) {
@@ -625,6 +638,8 @@ export function unchainNode(
 	} else {
 		TempHistoryFutureStep.push(node);
 	}
+	// Mark dirty for rendering
+	markBlankElementDirty(node);
 }
 
 /*
@@ -684,14 +699,19 @@ export function setParentLink(child: Leaf | Node, node: Node | null): void {
 		if (child.prevLeaf !== null) {
 			throw new Error('The child Leaf in setParentLink() must be the first Leaf of a LeafChain.');
 		}
+		if (node === null) {
+			throw new Error('If parent is null in setParentLink(), child must not be a Leaf.');
+		}
 	} else if (child.prevNode !== null) {
 		throw new Error('The child Node in setParentLink() must be the first Node of a NodeChain.');
 	}
 
 	let c = child;
+	// $FlowFixMe
 	p.firstChild = c;
 	while (c !== null) {
 		c.parent = node;
+		// $FlowFixMe
 		c = leaf ? c.nextLeaf : c.nextNode;
 	}
 }
@@ -706,14 +726,21 @@ export function setParentLink(child: Leaf | Node, node: Node | null): void {
 		  first child's parent is the same as the Node, do nothing.
 	@ params
 		start: Leaf | Node
-		parent: Node object
+		parent: Node | null
 */
-export function setParentNode(start: Leaf | Node, parent: Node): void {
+export function setParentNode(start: Leaf | Node, parent: Node | null): void {
 	if (start.parent === parent) return;
+
 	const leaf = instanceOf(start, 'Leaf');
+
+	if (leaf && parent === null) {
+		throw new Error('If parent is null in setParentNode(), child must not be a Leaf.');
+	}
+
 	let c = start;
 	while (c !== null) {
 		c.parent = parent;
+		// $FlowFixMe
 		c = leaf ? c.nextLeaf : c.nextNode;
 	}
 }
@@ -740,6 +767,8 @@ export function unchainLeaf(leaf: Leaf | NullLeaf | LeafChain | LeafText, past: 
 	} else {
 		TempHistoryFutureStep.push(leaf);
 	}
+	// Mark dirty for rendering
+	markBlankElementDirty(leaf);
 }
 
 /*
@@ -1035,10 +1064,13 @@ export function chainNodeChainBetween(
 	if (t1 === null) {
 		// If targetNode1 is null
 		// Get targetNode2's prevNode
+		// $FlowFixMe
 		let prev = t2.prevNode;
 		// Get parent
+		// $FlowFixMe
 		p = t2.parent;
 		// Unchain prev if targetNode2 is old
+		// $FlowFixMe
 		if (t2.new === false) {
 			if (prev === null) {
 				// Unchain a NullNode if prev is null
@@ -1054,6 +1086,7 @@ export function chainNodeChainBetween(
 		}
 		// Chain before t2
 		e.nextNode = t2;
+		// $FlowFixMe
 		t2.prevNode = e;
 		// Update parent's firstChild
 		if (p !== null) {
@@ -1113,13 +1146,13 @@ export function chainNodeChainBetween(
 	rechainNode:
 		- Rechain Node-related objects. For details, see comments for rechainLeaf().
 	@ params
-		leaf: mixed - Node | NullNode | NodeChain | NodeStyles | ParentLink |
+		leaf: any - Node | NullNode | NodeChain | NodeStyles | ParentLink |
 			  NodeType | PhantomNode | PhantomChain
 		fromPast: Boolean
 */
 export const _FROM_PAST_ = true; // eslint-disable-line
 export const _FROM_FUTURE_ = false; // eslint-disable-line
-export function rechainNode(node: mixed, fromPast: boolean): void {
+export function rechainNode(node: any, fromPast: boolean): void {
 	const n = node;
 
 	if (instanceOf(n, 'Node')) {
@@ -1205,7 +1238,6 @@ export function rechainNode(node: mixed, fromPast: boolean): void {
 
 		// Create a new PhantomNode for unchain
 		const pn = new PhantomNode(ref);
-		unchainNode(pn, !fromPast);
 
 		// Modify current chain
 		// Check if needed to remove current chain's parent
@@ -1240,6 +1272,8 @@ export function rechainNode(node: mixed, fromPast: boolean): void {
 		}
 		// Restore nodeType
 		ref.nodeType = nodeType;
+		// Unchain PhantomNode after ref is updated
+		unchainNode(pn, !fromPast);
 	} else if (instanceOf(n, 'PhantomChain')) {
 		const { startNode, endNode, prevNode, nextNode } = n;
 		const startRef = startNode.ref;
@@ -1249,7 +1283,6 @@ export function rechainNode(node: mixed, fromPast: boolean): void {
 			startNode: new PhantomNode(startRef),
 			endNode: new PhantomNode(endRef)
 		});
-		unchainNode(pc, !fromPast);
 
 		// Modify current chain
 		// Check if needed to remove current chain's parent
@@ -1321,6 +1354,8 @@ export function rechainNode(node: mixed, fromPast: boolean): void {
 		// Restore nodeType
 		startRef.nodeType = startNode.nodeType;
 		endRef.nodeType = endNode.nodeType;
+		// Unchain PhantomChain after startRef and endRef are updated
+		unchainNode(pc, !fromPast);
 	} else if (instanceOf(n, 'NodeChain')) {
 		const { prevNode, nextNode, startNode, endNode } = n;
 		const { parent } = startNode;
@@ -1466,7 +1501,7 @@ export function rechainNode(node: mixed, fromPast: boolean): void {
 			// Ensure setParentLink is safe to use
 			if (p.firstChild !== null) {
 				// If parent's firstChild is not null, detach (unchain PL)
-				detachFirstChild(p, !fromPast);
+				detachFirstChild(parent, !fromPast);
 			}
 			if (child.parent !== null) {
 				// If child's parent is not null, detach (unchain PL)
@@ -1510,7 +1545,7 @@ export function rechainNode(node: mixed, fromPast: boolean): void {
 			- first: Node object
 			- last: Node object
 */
-export function createNewBranchAt(type: Array<number>, at: number): Node {
+export function createNewBranchAt(type: Array<number>, at: number): Object {
 	if (at >= type.length) {
 		throw new Error('"at" must be smaller than the type\'s length for createNewBranchAt().');
 	}
@@ -1553,19 +1588,20 @@ export function shatter(leaf: Leaf, stop: Node): Object {
 	let lastNewParent = null;
 	let nextCutNode = null;
 	while (cutNode !== stop) {
+		// $FlowFixMe
 		nextCutNode = cutNode.parent; // nextCutNode is never null, because cutNode !== stop
 		if (above) {
-			// Cut above
+			// Cut above // $FlowFixMe
 			if (cutNode.prevNode !== null) {
-				// Save current Node attributes
+				// Save current Node attributes // $FlowFixMe
 				const phantom = new PhantomNode(cutNode);
 				// Cut prevNode
-				cutNode.prevNode.nextNode = null;
+				cutNode.prevNode.nextNode = null; // $FlowFixMe
 				cutNode.prevNode = null;
-				// Give cutNode a new parent
-				const newParent = new Node({ nodeType: nextCutNode.nodeType	});
+				// Give cutNode a new parent // $FlowFixMe
+				const newParent = new Node({ nodeType: nextCutNode.nodeType	}); // $FlowFixMe
 				cutNode.parent = null;
-				// Safe to use: cutNode remembered, and newParent is new
+				// Safe to use: cutNode remembered, and newParent is new // $FlowFixMe
 				setParentLink(cutNode, newParent);
 				// Unchain PhantomNode
 				unchainNode(phantom, _PAST_STACK_);
@@ -1575,23 +1611,23 @@ export function shatter(leaf: Leaf, stop: Node): Object {
 				lastNewParent = newParent;
 			}
 		} else {
-			// Cut below
+			// Cut below // $FlowFixMe
 			if (cutNode.nextNode !== null) {
 				const next = cutNode.nextNode;
 				// Save nextNode attributes
 				const phantom = new PhantomNode(next);
 				// Cut nextNode
-				next.prevNode = null;
+				next.prevNode = null; // $FlowFixMe
 				cutNode.nextNode = null;
-				// Switch nextNode onto the lastNewParent
+				// Switch nextNode onto the lastNewParent // $FlowFixMe
 				lastNewParent.nextNode = next;
 				next.prevNode = lastNewParent;
 				// Unchain PhantomNode
 				unchainNode(phantom, _PAST_STACK_);
 			}
-			// Give lastNewParent a new parent
+			// Give lastNewParent a new parent // $FlowFixMe
 			const newParent = new Node({ nodeType: nextCutNode.nodeType });
-			// Safe to use: lastNewParent and newParent are new and have no ParentLink
+			// Safe to use: lastNewParent and newParent are new and have no ParentLink // $FlowFixMe
 			setParentLink(lastNewParent, newParent);
 			// Update lastNewParent
 			lastNewParent = newParent;
@@ -1602,9 +1638,9 @@ export function shatter(leaf: Leaf, stop: Node): Object {
 
 	// Populate result
 	if (lastNewParent === null) {
-		// No shatter
+		// No shatter // $FlowFixMe
 		result.second = stop;
-	} else {
+	} else { // $FlowFixMe
 		result.first = stop;
 		result.second = lastNewParent;
 	}
@@ -1732,18 +1768,18 @@ export function chainLeafChainBetween(
 
 	if (t1 === null) {
 		// If targetLeaf1 is null
-		// Get targetLeaf2's prevLeaf
+		// Get targetLeaf2's prevLeaf // $FlowFixMe
 		let prev = t2.prevLeaf;
-		// Get parent
+		// Get parent // $FlowFixMe
 		p = t2.parent;
-		// Unchain if targetLeaf2 is old
+		// Unchain if targetLeaf2 is old // $FlowFixMe
 		if (t2.new === false) {
 			if (prev === null) {
 				// If prev is null, unchain a NullLeaf
 				prev = new NullLeaf({ prevLeaf: null, nextLeaf: t2 });
 			} else {
 				// If prev is not null, unchain a LeafChain
-				prev = new LeafChain({
+				prev = new LeafChain({ // $FlowFixMe
 					startLeaf: p.firstChild,
 					endLeaf: prev
 				});
@@ -1751,7 +1787,7 @@ export function chainLeafChainBetween(
 			unchainLeaf(prev, _PAST_STACK_);
 		}
 		// Chain before t2
-		e.nextLeaf = t2;
+		e.nextLeaf = t2; // $FlowFixMe
 		t2.prevLeaf = e;
 		// Update parent's firstChild
 		if (p !== null) {
@@ -1815,10 +1851,10 @@ export function chainLeafChainBetween(
 		  Leaves back between two Leaves needs LeafChain object, which describes it
 		  startLeaf.prevLeaf and endLeaf.nextLeaf.
 	@ params
-		leaf: mixed - Leaf | NullLeaf | LeafChain | LeafText
+		leaf: any - Leaf | NullLeaf | LeafChain | LeafText
 		fromPast: Boolean
 */
-export function rechainLeaf(leaf: mixed, fromPast: boolean): void {
+export function rechainLeaf(leaf: any, fromPast: boolean): void {
 	const l = leaf;
 
 	if (instanceOf(l, 'Leaf')) {
@@ -2108,7 +2144,7 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 			if (prevPrevLeaf !== null) {
 				prevPrevLeaf.nextLeaf = l;
 			} else {
-				// If prevPrevLeaf is null, update parent's firstChild
+				// If prevPrevLeaf is null, update parent's firstChild // $FlowFixMe
 				prevLeaf.parent.firstChild = l;
 			}
 			// If old, push prevLeaf to history past stack;
@@ -2189,7 +2225,7 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 			}
 			if (PostActionSelection.end) {
 				if (PostActionSelection.end.leaf === nextLeaf) {
-					PostActionSelection.start.leaf = leaf;
+					PostActionSelection.end.leaf = leaf;
 					PostActionSelection.end.range[0] += oi;
 					PostActionSelection.end.range[1] += oi;
 				}
@@ -2280,7 +2316,7 @@ export function copyLeafChain(
 			currentCopy = copyLeaf(startLeaf, startRange);
 			firstCopy = currentCopy;
 		} else if (currentL === endLeaf) {
-			// Copy the endLeaf
+			// Copy the endLeaf // $FlowFixMe
 			currentCopy = copyLeaf(endLeaf, endRange);
 			exit = true;
 		} else {
@@ -2385,21 +2421,25 @@ export function copyNodeChain(
 			// Copy Node's LeafChain
 			if (currentNode === startNode) {
 				const leafChainCopy = copyLeafChain(startLeaf, null, startRange, null);
+				// $FlowFixMe
 				currentCopy = copyNode(currentNode);
 				setParentLink(leafChainCopy.startLeaf, currentCopy);
 				firstLeaf = leafChainCopy.startLeaf;
 			} else if (currentNode === endNode) {
+				// $FlowFixMe
 				const leafChainCopy = copyLeafChain(endNode.firstChild, endLeaf, null, endRange);
+				// $FlowFixMe
 				currentCopy = copyNode(currentNode);
 				setParentLink(leafChainCopy.startLeaf, currentCopy);
 				lastLeaf = leafChainCopy.endLeaf;
-				exit = true;
-			} else if (instanceOf(currentNode.firstChild, 'Leaf')) {
+				exit = true; // $FlowFixMe
+			} else if (instanceOf(currentNode.firstChild, 'Leaf')) { // $FlowFixMe
 				const leafChainCopy = copyLeafChain(currentNode.firstChild, null, null, null);
+				// $FlowFixMe
 				currentCopy = copyNode(currentNode);
 				setParentLink(leafChainCopy.startLeaf, currentCopy);
 			} else {
-				// currentNode's firstChild is a Node
+				// currentNode's firstChild is a Node // $FlowFixMe
 				currentCopy = copyNode(currentNode);
 			}
 			// Chain or set parent link
@@ -2413,22 +2453,22 @@ export function copyNodeChain(
 			// Update currentCopyNode
 			currentCopyNode = currentCopy;
 		}
-		// Find the rootCopy - the first currentNode whose parent is null
+		// Find the rootCopy - the first currentNode whose parent is null // $FlowFixMe
 		if (rootCopy === null && currentNode.parent === null) {
 			rootCopy = currentCopy;
 		}
-		// Get next Node
+		// Get next Node // $FlowFixMe
 		if (instanceOf(currentNode.firstChild, 'Node') && currentCopyNode.firstChild === null) {
 			currentNode = currentNode.firstChild;
 			// Update prevParentCopy
 			prevParentCopy = currentCopyNode;
 			currentCopyNode = null; // = currentCopyNode = currentCopyNode.firstChild
-			prevCopy = null;
+			prevCopy = null; // $FlowFixMe
 		} else if (currentNode.nextNode !== null) {
 			prevCopy = currentCopyNode;
 			currentNode = currentNode.nextNode;
 			currentCopyNode = currentCopyNode.nextNode;
-		} else {
+		} else { // $FlowFixMe
 			currentNode = currentNode.parent;
 			currentCopyNode = currentCopyNode.parent;
 		}
@@ -2437,6 +2477,7 @@ export function copyNodeChain(
 		if (currentNode === null || exit) {
 			if (!exit) throw new Error('copyNodeChain() exits before copying the endLeaf.');
 			lastCopy = currentCopy;
+			// $FlowFixMe
 			while (lastCopy.parent !== null) {
 				lastCopy = lastCopy.parent;
 			}
@@ -2628,7 +2669,7 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 	// Step 1
 	while (index < 0) {
 		// Step 2
-		if (currentLC === lastLC) break;
+		if (currentLC === lastLC) break; // $FlowFixMe
 		currentLC = findNextLeafChain(currentLC, currentBT); // currentBT's branch will be modified
 		index = compareBranchType(currentBT, targetBT);
 	}
@@ -2636,7 +2677,7 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 	if (index < 0) return;
 	// Step 3
 	const EntryPoint = currentBT.branch[index].ref;
-	// Step 4 - shatter()
+	// Step 4 - shatter() // $FlowFixMe
 	const { first: before, second } = shatter(currentLC, EntryPoint);
 	if (before !== null) {
 		// If first tree is not null, first tree is the EntryPoint. Chain the second tree
@@ -2646,23 +2687,23 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 	// Step 5
 	const { first: middle, last } = createNewBranchAt(type, index);
 	const GrowType = last.nodeType;
-	// Step 6
+	// Step 6 // $FlowFixMe
 	copyNodeStyles(last, currentLC.parent);
 	// Step 7
 	let nextLC = null;
 	let GrowPoint = null;
 	// If growing on the "middle", middleEnd is the endNode of the "middle" chain, and
 	// the middleNext is what it will be chained to.
-	let middleEnd = middle;
+	let middleEnd = middle; // $FlowFixMe
 	let middleNext = EntryPoint.nextNode;
-	if (currentLC !== lastLC) {
+	if (currentLC !== lastLC) { // $FlowFixMe
 		nextLC = getNextLeafChain(currentLC); // No need for findNextLeafChain()
-		// Remeber current parent
+		// Remeber current parent // $FlowFixMe
 		const currentParent = currentLC.parent;
 		// Switch LeafChain
-		// (setParentLink) Safe to use: last is new and has no child, currentLC detached
+		// (setParentLink) Safe to use: last is new and has no child, currentLC detached // $FlowFixMe
 		switchParentNode(currentLC, last);
-		// Remove old parent and stop at EntryPoint
+		// Remove old parent and stop at EntryPoint // $FlowFixMe
 		removeNode(currentParent, EntryPoint);
 		// Set GrowPoint
 		GrowPoint = last;
@@ -2672,49 +2713,48 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 	let lastPhantom = null;
 	while (currentLC !== null) {
 		// Check if needed to unchain a PhantomNode
-		const currentNode = currentLC.parent;
+		const currentNode = currentLC.parent; // $FlowFixMe
 		if (currentNode.prevNode !== GrowPoint) {
 			// lastPhantom here is never null because the first GrowPoint is always a
-			// new Node
+			// new Node // $FlowFixMe
 			lastPhantom = new PhantomNode(currentNode);
 		}
 		// Step 9
 		if (currentLC !== lastLC) {
 			// nextLC here is never null because lastLC exists
 			nextLC = getNextLeafChain(currentLC);
-			// Check if next LeafChain is a sibling
+			// Check if next LeafChain is a sibling // $FlowFixMe
 			if (currentNode.nextNode === nextLC.parent) {
-				// Only update parent and nodeType if prevNode is already GrowPoint
+				// Only update parent and nodeType if prevNode is already GrowPoint // $FlowFixMe
 				if (currentNode.prevNode !== GrowPoint) {
-					// Switch current Node onto the GrowPoint with nextNode unchanged
-					currentNode.prevNode = GrowPoint;
+					// Switch current Node onto the GrowPoint with nextNode unchanged // $FlowFixMe
+					currentNode.prevNode = GrowPoint; // $FlowFixMe
 					GrowPoint.nextNode = currentNode;
 				}
-				// Set parent
+				// Set parent // $FlowFixMe
 				currentNode.parent = GrowPoint.parent;
-				// If NodeType changes, unchain a NodeType
-				if (currentNode.nodeType !== GrowType) {
+				// If NodeType changes, unchain a NodeType // $FlowFixMe
+				if (currentNode.nodeType !== GrowType) { // $FlowFixMe
 					const nt = new NodeType(currentNode.nodeType, currentNode);
 					unchainNode(nt, _PAST_STACK_);
-					// Set NodeType
+					// Set NodeType // $FlowFixMe
 					currentNode.nodeType = GrowType;
 				}
-			} else {
-				const tempPrev = lastPhantom.prevNode;
-				const tempNext = currentNode.nextNode;
+			} else { // $FlowFixMe
+				const tempPrev = lastPhantom.prevNode; // $FlowFixMe
+				const tempNext = currentNode.nextNode; // $FlowFixMe
 				const tempParent = currentNode.parent;
 				// Unchain a PhantomChain using the last declared PhantomNode and the
 				// PhantomNode of the currentNode
 				const pc = new PhantomChain({
-					startNode: lastPhantom,
+					startNode: lastPhantom, // $FlowFixMe
 					endNode: new PhantomNode(currentNode)
 				});
-				unchainNode(pc, _PAST_STACK_);
 				// Check if needed to remove old parent
-				if (tempPrev === null && tempNext === null) {
+				if (tempPrev === null && tempNext === null) { // $FlowFixMe
 					removeNode(tempParent);
 				} else {
-					if (tempPrev === null) {
+					if (tempPrev === null) { // $FlowFixMe
 						setFirstChild(tempParent, tempNext);
 					} else {
 						tempPrev.nextNode = tempNext;
@@ -2723,33 +2763,34 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 						tempNext.prevNode = tempPrev;
 					}
 				}
-				// Switch current Node onto the GrowPoint with nextNode as null
-				currentNode.prevNode = GrowPoint;
-				GrowPoint.nextNode = currentNode;
-				currentNode.parent = GrowPoint.parent;
-				currentNode.nodeType = GrowType;
+				// Switch current Node onto the GrowPoint with nextNode as null // $FlowFixMe
+				currentNode.prevNode = GrowPoint; // $FlowFixMe
+				GrowPoint.nextNode = currentNode; // $FlowFixMe
+				currentNode.parent = GrowPoint.parent; // $FlowFixMe
+				currentNode.nodeType = GrowType; // $FlowFixMe
 				currentNode.nextNode = null;
+				// Unchain PhantomChain after currentNode is updated
+				unchainNode(pc, _PAST_STACK_);
 			}
 			// Set current Node as the new GrowPoint
 			GrowPoint = currentNode;
 			// Iterate to the next LeafChain
 			currentLC = nextLC;
-		} else {
-			const tempPrev = lastPhantom.prevNode;
-			const tempNext = currentNode.nextNode;
+		} else { // $FlowFixMe
+			const tempPrev = lastPhantom.prevNode; // $FlowFixMe
+			const tempNext = currentNode.nextNode; // $FlowFixMe
 			const tempParent = currentNode.parent;
 			// Unchain a PhantomChain using the last declared PhantomNode and the
 			// PhantomNode of the currentNode
 			const pc = new PhantomChain({
-				startNode: lastPhantom,
+				startNode: lastPhantom, // $FlowFixMe
 				endNode: new PhantomNode(currentNode)
 			});
-			unchainNode(pc, _PAST_STACK_);
 			// Check if needed to remove old parent
-			if (tempPrev === null && tempNext === null) {
+			if (tempPrev === null && tempNext === null) { // $FlowFixMe
 				removeNode(tempParent);
 			} else {
-				if (tempPrev === null) {
+				if (tempPrev === null) { // $FlowFixMe
 					setFirstChild(tempParent, tempNext);
 				} else {
 					tempPrev.nextNode = tempNext;
@@ -2758,17 +2799,19 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 					tempNext.prevNode = tempPrev;
 				}
 			}
-			// Switch current Node onto the GrowPoint with nextNode as null
-			currentNode.prevNode = GrowPoint;
-			GrowPoint.nextNode = currentNode;
-			currentNode.parent = GrowPoint.parent;
-			currentNode.nodeType = GrowType;
+			// Switch current Node onto the GrowPoint with nextNode as null // $FlowFixMe
+			currentNode.prevNode = GrowPoint; // $FlowFixMe
+			GrowPoint.nextNode = currentNode; // $FlowFixMe
+			currentNode.parent = GrowPoint.parent; // $FlowFixMe
+			currentNode.nodeType = GrowType; // $FlowFixMe
 			currentNode.nextNode = null;
+			// Unchain PhantomChain after currentNode is updated
+			unchainNode(pc, _PAST_STACK_);
 			// If growing on the "middle", update middleEnd and middleNext.
 			// middleNext is the last Node's original next Node, if its new parent
 			// is the same as that next Node's parent. Otherwise, middleNext is null.
 			if (middle === last) {
-				middleEnd = currentNode;
+				middleEnd = currentNode; // $FlowFixMe
 				if (tempNext !== null && currentNode.parent === tempNext.parent) {
 					middleNext = tempNext;
 				} else {
@@ -2779,16 +2822,16 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 			break;
 		}
 	}
-	// Step 10
+	// Step 10 // $FlowFixMe
 	if (EntryPoint.prevNode === null && middleNext === null) {
-		// EntryPoint is the only Node -> unchain a ParentLink
-		const p = EntryPoint.parent || DocumentRoot;
+		// EntryPoint is the only Node -> unchain a ParentLink // $FlowFixMe
+		const p = EntryPoint.parent || DocumentRoot; // $FlowFixMe
 		const pl = new ParentLink(EntryPoint, EntryPoint.parent);
 		unchainNode(pl, _PAST_STACK_);
 		p.firstChild = null;
-		// Safe to use: middle is new and has no parent, EntryPoint unchained.
+		// Safe to use: middle is new and has no parent, EntryPoint unchained. // $FlowFixMe
 		setParentLink(middle, EntryPoint.parent);
-	} else {
+	} else { // $FlowFixMe
 		chainNodeChainBetween(middle, middleEnd, before || EntryPoint.prevNode, middleNext);
 	}
 
@@ -2801,6 +2844,9 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 		- Update old NodeStyles with new NodeStyles, not replace.
 		- Only works on old Node.
 		- Unchain old NodeStyles if different. Do nothing if same.
+		- If Node has no styles (null), do nothong, because applyNodeStyle is only
+		  used by applyNodesStyle(), which applying styles to Leaves' immediate
+		  parents.
 	@ param
 		Node: Node object
 		newStyles: Object
@@ -2814,6 +2860,8 @@ export function applyNodeStyle(node: Node, newStyles: Object = {}): void {
 	const { styles } = n;
 	const { ...oldStyles } = styles;
 	const newNodeStyles = new NodeStyles({ ...oldStyles, ...newStyles });
+	// If Node has no styles, do nothing.
+	if (styles === null) return;
 	// If applying same styles, do nothing.
 	if (styles.hash === newNodeStyles.hash) return;
 
@@ -2839,7 +2887,7 @@ export function applyNodesStyle(selections: Array<SelectionObject>, newStyles: O
 	const { leaf: startLC } = selections[0];
 	const { leaf: endLC } = selections[1];
 	let currentLC = startLC;
-	while (currentLC !== null) {
+	while (currentLC !== null) { // $FlowFixMe
 		applyNodeStyle(currentLC.parent, newStyles);
 		if (currentLC === endLC) {
 			break;
@@ -2917,6 +2965,7 @@ export function copyBranchText(selections: Array<SelectionObject>): void {
 */
 export function copyFromClipboard(): Object | null {
 	if (instanceOf(Clipboard.firstChild, 'Leaf')) {
+		// $FlowFixMe
 		const copy = copyLeafChain(Clipboard.startLeaf, null, null, null);
 		return {
 			startNode: null,
@@ -2925,6 +2974,7 @@ export function copyFromClipboard(): Object | null {
 			endLeaf: copy.endLeaf
 		};
 	} else if (instanceOf(Clipboard.firstChild, 'Node')) {
+		// $FlowFixMe
 		const copy = copyNodeChain(Clipboard.startLeaf, Clipboard.endLeaf, null, null);
 		return {
 			startNode: copy.startNode,
@@ -3108,7 +3158,7 @@ export function appendAndGrow(
 	// Step 6
 	if (startLeaf.parent !== endLeaf.parent) {
 		let currentLC = getNextLeafChain(startLeaf);
-		while (currentLC !== null) {
+		while (currentLC !== null) { // $FlowFixMe
 			removeNode(currentLC.parent);
 			if (currentLC.parent === endLeaf.parent) break;
 			currentLC = getNextLeafChain(currentLC);
@@ -3135,13 +3185,13 @@ export function appendAndGrow(
 		setLeafStyles(first, CaretStyle);
 		chainLeaf(first, appendBefore);
 		AppendPoint = first;
-	} else if (instanceOf(replacement, 'LeafChain')) {
-		chainLeaf(replacement.startLeaf, appendBefore);
+	} else if (instanceOf(replacement, 'LeafChain')) { // $FlowFixMe
+		chainLeaf(replacement.startLeaf, appendBefore); // $FlowFixMe
 		AppendPoint = replacement.endLeaf;
 		type = IS_LEAF;
-	} else if (instanceOf(replacement, 'NodeChain')) {
-		const first = findFirstLeafChain(replacement.startNode);
-		nextLeafForNode = getNextLeafChain(first);
+	} else if (instanceOf(replacement, 'NodeChain')) { // $FlowFixMe
+		const first = findFirstLeafChain(replacement.startNode); // $FlowFixMe
+		nextLeafForNode = getNextLeafChain(first); // $FlowFixMe
 		chainLeaf(first, appendBefore);
 		AppendPoint = first;
 		type = IS_NODE;
@@ -3150,15 +3200,15 @@ export function appendAndGrow(
 	// Step 10
 	let middleStart = null;
 	let middleEnd = null;
-	const GrowParent = appendBefore.parent;
-	const GrowType = GrowParent.nodeType;
+	const GrowParent = appendBefore.parent; // $FlowFixMe
+	const GrowType = GrowParent.nodeType; // $FlowFixMe
 	const GrowStyle = GrowParent.styles;
 	if (type === IS_STRING) {
 		let GrowPoint = null;
 		let currentL = null;
 		let currentN = null;
-		let index = 1;
-		while (index < texts.length) {
+		let index = 1; // $FlowFixMe
+		while (index < texts.length) { // $FlowFixMe
 			currentL = new Leaf({ text: texts[index] });
 			setLeafStyles(currentL, CaretStyle);
 			currentN = new Node({ nodeType: GrowType });
@@ -3207,16 +3257,16 @@ export function appendAndGrow(
 		}
 	}
 
-	// Step 11
+	// Step 11 // $FlowFixMe
 	chainLeaf(appendAfter, AppendPoint);
 
 	// Step 12
-	if (middleStart !== null) {
+	if (middleStart !== null) { // $FlowFixMe
 		chainNodeChainBetween(middleStart, middleEnd, GrowParent, GrowParent.nextNode);
 	}
 
-	// PAS
-	const os = isZeroLeaf(AppendPoint) ? 0 : AppendPoint.text.length;
+	// PAS // $FlowFixMe
+	const os = isZeroLeaf(AppendPoint) ? 0 : AppendPoint.text.length; // $FlowFixMe
 	setPAS({ leaf: AppendPoint, range: [os, os] }, { leaf: AppendPoint,	range: [os, os]	});
 
 	// Step 13
@@ -3241,7 +3291,8 @@ export function appendAndGrow(
 			- If appendAfter is one single zeroLeaf, replace startLeaf with appendBefore, and
 			  set startLeaf's original next LeafChain as ShatterPoint.
 			- Else, create a new Node after their parent. Set parent link between the new Node
-			  and appendAfter. Then set the Node as old(!) and as ShatterPoint.
+			  and appendAfter. Then set the Node to old(!) and as ShatterPoint.
+			  	- In render(), the Node is still treated as new because it has a new id.
 		6. If startLeaf and endLeaf have different parents:
 			- Remove every LeafChain between startLeaf and endLeaf.
 			- If appendBefore is zeroLeaf and startLeaf is the first leaf, remove startLeaf's
@@ -3285,10 +3336,10 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 	DirtyNewLeaves.push(appendAfter);
 
 	// Step 4
-	let startRoot = startLeaf.parent;
+	let startRoot = startLeaf.parent; // $FlowFixMe
 	while (startRoot.parent !== null) {
 		startRoot = startRoot.parent;
-	}
+	} // $FlowFixMe
 	const startRootPrev = startRoot.prevNode;
 
 	// Step 5 & 6
@@ -3298,7 +3349,7 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 		const p = startLeaf.parent;
 		const nextLeaf = getNextLeafChain(startLeaf);
 		if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null &&
-			isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) {
+			isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) { // $FlowFixMe
 			removeNode(p);
 			ShatterPoint = nextLeaf;
 		} else if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null) {
@@ -3334,10 +3385,10 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 			} else {
 				chainLeaf(appendBefore, prevStart);
 			}
-			// Create a new Node
-			const n = new Node({ nodeType: p.nodeType });
+			// Create a new Node // $FlowFixMe
+			const n = new Node({ nodeType: p.nodeType }); // $FlowFixMe
 			copyNodeStyles(n, p);
-			// Insert after p
+			// Insert after p // $FlowFixMe
 			chainNodeChainBetween(n, n, p, p.nextNode);
 			// Set parent link
 			setParentLink(appendAfter, n);
@@ -3349,13 +3400,13 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 	} else {
 		// startLeaf and endLeaf have different parents
 		// Remove every LeafChain between startLeaf and endLeaf
-		let currentLC = getNextLeafChain(startLeaf);
-		while (currentLC.parent !== endLeaf.parent) {
-			removeNode(currentLC.parent);
+		let currentLC = getNextLeafChain(startLeaf); // $FlowFixMe
+		while (currentLC.parent !== endLeaf.parent) { // $FlowFixMe
+			removeNode(currentLC.parent); // $FlowFixMe
 			currentLC = getNextLeafChain(currentLC);
 		}
 		// appendBefore
-		if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null) {
+		if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null) { // $FlowFixMe
 			removeNode(startLeaf.parent);
 		} else {
 			const prevStart = startLeaf.prevLeaf;
@@ -3372,7 +3423,7 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 		}
 		// appendAfter
 		if (isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) {
-			const nextLeaf = getNextLeafChain(endLeaf);
+			const nextLeaf = getNextLeafChain(endLeaf); // $FlowFixMe
 			removeNode(endLeaf.parent);
 			// Set ShatterPoint
 			ShatterPoint = nextLeaf;
@@ -3391,30 +3442,30 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 	if (ShatterPoint === null) {
 		// At the end of the Document
 		if (DocumentRoot.firstChild === null) {
-			// Document is empty
+			// Document is empty // $FlowFixMe
 			setParentLink(replacement.startNode, null);
 		} else if (startRootPrev !== null) {
-			if (startRootPrev.nextNode !== null) {
+			if (startRootPrev.nextNode !== null) { // $FlowFixMe
 				chainNode(replacement.startNode, startRoot);
-			} else {
+			} else { // $FlowFixMe
 				chainNode(replacement.startNode, startRootPrev);
 			}
-		} else {
+		} else { // $FlowFixMe
 			chainNode(replacement.startNode, startRoot);
 		}
 	} else {
 		// Find root parent of ShatterPoint
-		let shatterRoot = ShatterPoint.parent;
+		let shatterRoot = ShatterPoint.parent; // $FlowFixMe
 		while (shatterRoot.parent !== null) {
 			shatterRoot = shatterRoot.parent;
 		}
-		// Shatter on ShatterPoint and stop at shatterRoot
+		// Shatter on ShatterPoint and stop at shatterRoot // $FlowFixMe
 		const { first, second } = shatter(ShatterPoint, shatterRoot);
 		// Insert replacement
 		if (first !== null) {
-			// If first is not null, chain second after replacement's endNode
+			// If first is not null, chain second after replacement's endNode // $FlowFixMe
 			chainNode(second, replacement.endNode);
-			chainNodeChainBetween(
+			chainNodeChainBetween( // $FlowFixMe
 				replacement.startNode,
 				second,
 				first,
@@ -3422,8 +3473,8 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 			);
 		} else {
 			// If first is null, second is the ShatterRoot
-			chainNodeChainBetween(
-				replacement.startNode,
+			chainNodeChainBetween( // $FlowFixMe
+				replacement.startNode, // $FlowFixMe
 				replacement.endNode,
 				second.prevNode,
 				second
@@ -3432,7 +3483,7 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 	}
 
 	// PAS
-	// Find the last leaf in replacement.endNode
+	// Find the last leaf in replacement.endNode // $FlowFixMe
 	let ll = replacement.endNode.firstChild;
 	while (ll !== null) {
 		if (instanceOf(ll, 'Leaf')) {
@@ -3543,12 +3594,12 @@ export function removeAndAppend(
 	// Step 4
 	if (startLeaf === endLeaf) {
 		if (isZeroLeaf(startLeaf) && flag === _NEWLINE_) {
-			// 4.1
-			const nn = new Node({ nodeType: startLeaf.parent.nodeType });
+			// 4.1 // $FlowFixMe
+			const nn = new Node({ nodeType: startLeaf.parent.nodeType }); // $FlowFixMe
 			copyNodeStyles(nn, startLeaf.parent);
 			const zl = new Leaf();
 			copyLeafStyles(zl, startLeaf);
-			setParentLink(zl, nn);
+			setParentLink(zl, nn); // $FlowFixMe
 			chainNodeChainBetween(nn, nn, startLeaf.parent, startLeaf.parent.nextNode);
 			// pas
 			pasl = zl;
@@ -3567,10 +3618,10 @@ export function removeAndAppend(
 			} else {
 				chainLeaf(appendBefore, prevStart);
 			}
-			// Grow new Node with appendAfter
-			const nn = new Node({ nodeType: p.nodeType });
+			// Grow new Node with appendAfter // $FlowFixMe
+			const nn = new Node({ nodeType: p.nodeType }); // $FlowFixMe
 			copyNodeStyles(nn, p);
-			setParentLink(appendAfter, nn);
+			setParentLink(appendAfter, nn); // $FlowFixMe
 			chainNodeChainBetween(nn, nn, p, p.nextNode);
 			// pas
 			pasl = appendAfter;
@@ -3583,7 +3634,7 @@ export function removeAndAppend(
 					// At the beginning of the Leaf
 					if (startLeaf.prevLeaf === null) {
 						const prevLC = getPrevLeafChain(startLeaf);
-						if (prevLC !== null) {
+						if (prevLC !== null) { // $FlowFixMe
 							removeNode(startLeaf.parent);
 							// Get the last Leaf of the previous LeafChain
 							let l = prevLC;
@@ -3618,7 +3669,7 @@ export function removeAndAppend(
 					if (startLeaf.nextLeaf === null) {
 						const nextLC = getNextLeafChain(startLeaf);
 						if (nextLC !== null) {
-							if (isZeroLeaf(startLeaf)) {
+							if (isZeroLeaf(startLeaf)) { // $FlowFixMe
 								removeNode(startLeaf.parent);
 								// pas
 								pasl = nextLC;
@@ -3627,7 +3678,7 @@ export function removeAndAppend(
 								const { startLeaf: nextCopy } = copyLeafChain(nextLC, null, null, null);
 								nextCopy.consumed = false;
 								DirtyNewLeaves.push(nextCopy);
-								// Remove the next LeafChain's parent
+								// Remove the next LeafChain's parent // $FlowFixMe
 								removeNode(nextLC.parent);
 								// Chain nextCopy after startLeaf
 								chainLeaf(nextCopy, startLeaf);
@@ -3660,12 +3711,12 @@ export function removeAndAppend(
 		if (startLeaf.parent !== endLeaf.parent) {
 			// startLeaf and endLeaf have different parents
 			// Remove every LeafChain between startLeaf and endLeaf
-			let currentLC = getNextLeafChain(startLeaf);
-			while (currentLC.parent !== endLeaf.parent) {
-				removeNode(currentLC.parent);
+			let currentLC = getNextLeafChain(startLeaf); // $FlowFixMe
+			while (currentLC.parent !== endLeaf.parent) { // $FlowFixMe
+				removeNode(currentLC.parent); // $FlowFixMe
 				currentLC = getNextLeafChain(currentLC);
 			}
-			// Remove endLeaf's parent too
+			// Remove endLeaf's parent too // $FlowFixMe
 			removeNode(endLeaf.parent);
 		}
 
@@ -3684,10 +3735,10 @@ export function removeAndAppend(
 					chainLeaf(appendBefore, prevStart);
 				}
 			}
-			// Grow new Node with appendAfter
-			const nn = new Node({ nodeType: p.nodeType });
+			// Grow new Node with appendAfter // $FlowFixMe
+			const nn = new Node({ nodeType: p.nodeType }); // $FlowFixMe
 			copyNodeStyles(nn, p);
-			setParentLink(appendAfter, nn);
+			setParentLink(appendAfter, nn); // $FlowFixMe
 			chainNodeChainBetween(nn, nn, p, p.nextNode);
 			// pas
 			pasl = appendAfter;
@@ -3712,7 +3763,7 @@ export function removeAndAppend(
 		}
 	}
 
-	// PAS
+	// PAS // $FlowFixMe
 	setPAS({ leaf: pasl, range: [os, os] }, { leaf: pasl, range: [os, os] });
 
 	// Step 7
@@ -3768,11 +3819,11 @@ export function applyBranchText(
 	} else if (instanceOf(replacement, 'LeafChain')) {
 		nonEmptyStringOrLeafChain = true;
 	} else if (instanceOf(replacement, 'NodeChain')) {
-		isNodeChain = true;
+		isNodeChain = true; // $FlowFixMe
 		const firstLeaf = findFirstLeafChain(replacement.startNode);
 		if (firstLeaf === null) {
 			throw new Error('All Nodes in replacement must not have null firstChild');
-		}
+		} // $FlowFixMe
 		if (startLeaf.parent.nodeType === firstLeaf.parent.nodeType) {
 			sameNodeType = true;
 		}
@@ -3786,14 +3837,14 @@ export function applyBranchText(
 	}
 	if (isZeroLeaf(startLeaf)) {
 		zeroLeaf = true;
-	}
+	} // $FlowFixMe
 	if (startLeaf.parent.parent === null && startLeaf.parent.nodeType === 0) {
 		rootBT = true;
 	}
 
 	if (nonEmptyStringOrLeafChain || (zeroLeaf && !rootBT) || sameNodeType) {
 		appendAndGrow(selections, replacement);
-	} else if (((zeroLeaf && rootBT) || !sameNodeType) && isNodeChain) {
+	} else if (((zeroLeaf && rootBT) || !sameNodeType) && isNodeChain) { // $FlowFixMe
 		shatterAndInsert(selections, replacement);
 	} else if (emptyString) {
 		removeAndAppend(selections, flag);
@@ -3868,11 +3919,11 @@ export function applyLeafStyle(
 
 	// PAS
 	if (PostActionSelection.start !== null && PostActionSelection.start.leaf === leaf) {
-		PostActionSelection.start.leaf = middle;
+		PostActionSelection.start.leaf = middle; // $FlowFixMe
 		PostActionSelection.start.range = [0, isZeroLeaf(middle) ? 0 : middle.text.length];
 	}
 	if (PostActionSelection.end !== null && PostActionSelection.end.leaf === leaf) {
-		PostActionSelection.end.leaf = middle;
+		PostActionSelection.end.leaf = middle; // $FlowFixMe
 		PostActionSelection.end.range = [0, isZeroLeaf(middle) ? 0 : middle.text.length];
 	}
 

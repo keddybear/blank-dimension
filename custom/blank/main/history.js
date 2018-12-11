@@ -8,15 +8,15 @@ export class BlankHistoryStep {
 		past: Boolean - default: false
 		future: Boolean - default: false
 		redo: Boolean - default: false
-		bas: BlankSelection - default: null
-		pas: BlankSelection - default: null
+		bas: BlankSelection
+		pas: BlankSelection
 	*/
 	stack: Array<mixed>;
 	past: boolean;
 	future: boolean;
 	redo: boolean;
-	bas: BlankSelection | null;
-	pas: BlankSelection | null;
+	bas: BlankSelection;
+	pas: BlankSelection;
 
 	/*
 		@ methods

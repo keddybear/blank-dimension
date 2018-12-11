@@ -1,5 +1,10 @@
 // @flow
 
+// Node type enum
+export const NodeTypes = {
+	PARAGRAPH: 0
+};
+
 let BlankCounterExists = false;
 export class BlankElementCounter {
 	/*
@@ -128,24 +133,28 @@ export class Node {
 		branchType: Array<number> - default: null;
 		prevNode: Node object - default: null
 		nextNode: Node object - default: null
-		firstChild: mixed - default: null
+		firstChild: any - default: null
 			- Node
 			- Leaf
 			- ...
 		new: Boolean - default true
 		Node: Boolean - default true
 		id: number
+		renderPos: number | null - default: null
+		dirty: number - default: 0
 	*/
 	styles: NodeStyles | null;
 	nodeType: number;
 	branchType: Array<number> | null; // TODO
 	prevNode: Node | null;
 	nextNode: Node | null;
-	firstChild: mixed | null;
+	firstChild: any | null;
 	parent: Node | null;
 	new: boolean;
 	Node: boolean;
 	id: number; // unique id
+	renderPos: number | null;
+	dirty: number;
 
 	/*
 		constructor
@@ -157,7 +166,7 @@ export class Node {
 		this.styles = props.styles || null;
 		this.prevNode = props.prevNode || null;
 		this.nextNode = props.nextNode || null;
-		this.nodeType = props.nodeType || 0;
+		this.nodeType = props.nodeType || NodeTypes.PARAGRAPH;
 		// When created, firstChild is always null. Manually assign this.
 		this.firstChild = null;
 		// When created, parent is always null. Manually assign this.
@@ -178,6 +187,10 @@ export class Node {
 
 		// Id
 		this.id = BlankCounter.get();
+
+		// Render attributes
+		this.renderPos = null;
+		this.dirty = 0;
 	}
 }
 
@@ -440,7 +453,7 @@ export class PhantomChain {
 }
 
 export const BLANK_EDITOR_ID = 'blank-editor';
-class RootNode {
+export class RootNode {
 	/*
 		RootNode is the document root of BlankEditor.
 
@@ -455,11 +468,15 @@ class RootNode {
 		new: boolean
 		container: HTMLElement | null
 		RootNode: Boolean
+		renderPos: number | null - default: null
+		dirty: number - default: 0
 	*/
 	firstChild: Node | null;
 	new: boolean;
 	container: HTMLElement | null; // TODO (Should not be null)
 	RootNode: boolean;
+	renderPos: number | null;
+	dirty: number;
 
 	/*
 		constructor
@@ -475,6 +492,10 @@ class RootNode {
 
 		// Identity check
 		this.RootNode = true;
+
+		// Render attributes
+		this.renderPos = null;
+		this.dirty = 0;
 	}
 }
 

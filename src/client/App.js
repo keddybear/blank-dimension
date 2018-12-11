@@ -4,13 +4,16 @@ import { BrowserRouter, Switch, Route } from 'react-router-dom';
 import { connect } from 'react-redux';
 import { fetchCSRF, fireServerError, setAuth } from 'actions/Index/actions';
 
-import Login from 'components/Login/Index';
-import Welcome from './Welcome';
+// import Login from 'components/Login/Index';
+// import Welcome from './Welcome';
 import ErrorConsole from './ErrorConsole';
-import TOS from './TOS';
-import NoMatch from './404';
+// import TOS from './TOS';
+// import NoMatch from './404';
 // import Editor from 'components/Editor/Dynamic';
 // import BlankEditor from 'custom/blank/editor';
+
+// Blank Editor Test
+import BlankTest from './test/BlankTest';
 
 import 'vendors/bootstrap-sass-3.3.7/stylesheets/bootstrap-custom.scss';
 import 'assets/stylesheets/main.scss';
@@ -80,17 +83,18 @@ class App extends Component {
 	// }
 
 	render() {
-		const { renderRoute } = this;
+		// const { renderRoute } = this;
 
 		return (
 			<div>
 				<BrowserRouter>
 					<Switch>
+						<Route component={BlankTest} />
 						{/* renderRoute({ path: '/', exact: true }, Login) */}
 						{/* renderRoute({ path: '/welcome' }, Welcome) */}
 						{/* renderRoute({ path: '/terms' }, TOS) */}
 						{/* renderRoute({ path: '/', exact: true }, BlankEditor) */}
-						<Route component={NoMatch} />
+						{/* <Route component={NoMatch} /> */}
 					</Switch>
 				</BrowserRouter>
 				<ErrorConsole />

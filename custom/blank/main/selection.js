@@ -1,6 +1,7 @@
 // @flow
 import { Leaf, isZeroLeaf, isTextLeaf, LeafDataAttributes, applyCaretStyle } from './leaf';
 import { Node as BlankNode, DocumentRoot } from './node';
+import { ReactMap } from './render';
 import { instanceOf, isBitSet, BlankFlags } from './utils';
 
 let BlankElementMapExists = false;
@@ -12,9 +13,9 @@ class BlankElementMap {
 		Only one map can be created for one BlankEditor.
 
 		IMPORTANT:
-		Do not use WeakMap to map the other way around. Since only the key is "weakly
-		referenced", the value will not be garbage collected. If you use the value in
-		another WeakMap as key, it defeats the purpose of "Weak".
+		Since only the key is "weakly referenced", the value will not be garbage
+		collected. If you use the value in another WeakMap as key, it defeats the
+		purpose of "Weak".
 	*/
 
 	/*
@@ -67,51 +68,6 @@ class BlankElementMap {
 }
 
 export const BlankMap = new BlankElementMap();
-
-class DOMElementMap {
-	/*
-		This is a temporary WeakMap to map Leaf/Node to DOM for converting PAS into window
-		selection. After conversion, this map is cleared.
-	*/
-
-	/*
-		@ attributes
-		wm: WeakMap object
-	*/
-	wm: WeakMap<BlankNode | Leaf, Node>;
-
-	/*
-		constructor
-	*/
-	constructor() {
-		this.wm = new WeakMap();
-	}
-
-	clear() {
-		this.wm = new WeakMap();
-	}
-
-	delete(k: Leaf | BlankNode) {
-		return this.wm.delete(k);
-	}
-
-	get(k: Leaf | BlankNode) {
-		return this.wm.get(k);
-	}
-
-	has(k: Leaf | BlankNode) {
-		return this.wm.has(k);
-	}
-
-	set(k: Leaf | BlankNode, v: Node) {
-		this.wm.set(k, v);
-		return this;
-	}
-}
-
-// DOMTempMap is used to store temporary mapping from Blank Element to DOM Element.
-// Mapping is set during Render and cleared in setWindowSelection().
-export const DOMTempMap = new DOMElementMap();
 
 export type LeafSelection = {
 	leaf: Leaf,
@@ -418,7 +374,6 @@ export function toSelections(selection: BlankSelection): Array<SelectionObject> 
 		- Update native selection from BlankSelection.
 		- Do nothing if BlankSelection is invalid or no corresponding DOM Element
 		  is found.
-		- Clear DOMTempMap in the end.
 		- Set SELECTION_FROM_BS to true, so onSelectionChangeHandler() won't create
 		  a new BlankSelection.
 	@ params
@@ -431,10 +386,19 @@ export function setWindowSelection(selection: BlankSelection) {
 	if (selection.start === null || selection.end === null) return;
 
 	const { start, end } = selection;
-	// Get startNode and endNode (DOM) using DOMTempMap
-	const s = DOMTempMap.get(start.leaf);
+	// Get startNode and endNode (DOM) using ReactMap
+	const sComp = ReactMap.get(start.leaf);
+	if (!sComp) return; // $FlowFixMe
+	if (!sComp.selectRef) return;
+	const eComp = ReactMap.get(end.leaf);
+	if (!eComp) return; // $FlowFixMe
+	if (!eComp.selectRef) return;
+
+	// $FlowFixMe
+	const s = sComp.selectRef.current;
 	if (!s) return;
-	const e = DOMTempMap.get(end.leaf);
+	// $FlowFixMe
+	const e = eComp.selectRef.current;
 	if (!e) return;
 
 	let anchorNode = null;
@@ -453,10 +417,10 @@ export function setWindowSelection(selection: BlankSelection) {
 
 	// Get focusNode and focusOffset
 	if (isTextLeaf(end.leaf)) {
-		focusNode = s.firstChild;
+		focusNode = e.firstChild;
 		focusOffset = end.range[1]; // eslint-disable-line
 	} else {
-		anchorNode = s.nextSibling;
+		anchorNode = e.nextSibling;
 		focusOffset = 0;
 	}
 
@@ -479,9 +443,6 @@ export function setWindowSelection(selection: BlankSelection) {
 		newRange.setEnd(focusNode, focusOffset);
 		sel.addRange(newRange);
 	}
-	// Clear DOMTempMap
-	DOMTempMap.clear();
-
 	// Set SELECTION_FROM_BS to true
 	BlankFlags.SELECTION_FROM_BS = true;
 }
