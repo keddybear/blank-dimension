@@ -1,6 +1,12 @@
 // @flow
 import { Node, BlankCounter } from './node';
 
+// Leaf type enum
+export const LeafTypes = {
+	TEXT: 0,
+	IMAGE: 1
+};
+
 export class LeafStyles {
 	/*
 		NOTE: If you change LeafStyles attributes, you need to update setLeafStyles() and
@@ -99,6 +105,8 @@ export class Leaf {
 		parent: Node object - default: null
 		Leaf: Boolean - default: true
 		id: number
+		renderPos: number | null - default: null
+		dirty: number - default: 0
 	*/
 	text: string;
 	styles: LeafStyles;
@@ -110,6 +118,8 @@ export class Leaf {
 	parent: null | Node;
 	Leaf: boolean;
 	id: number; // unique id
+	renderPos: number | null;
+	dirty: number;
 
 	/*
 		constructor
@@ -123,7 +133,7 @@ export class Leaf {
 		this.prevLeaf = props.prevLeaf || null;
 		this.nextLeaf = props.nextLeaf || null;
 		// By default, Leaf is a text Leaf.
-		this.type = props.type || 0;
+		this.type = props.type || LeafTypes.TEXT;
 		// When created, Leaf's parent is always null. Manually assign this.
 		// When assigned, every Leaf in the chain should have the same parent.
 		this.parent = null;
@@ -141,6 +151,10 @@ export class Leaf {
 
 		// Id
 		this.id = BlankCounter.get();
+
+		// Render attributes
+		this.renderPos = null;
+		this.dirty = 0;
 	}
 }
 

@@ -2,6 +2,7 @@
 import { Node, DocumentRoot } from '../node';
 import { Leaf, isZeroLeaf, LeafStyles, NullLeaf, LeafChain, ParentLink } from '../leaf';
 import { History, BlankHistoryStep, copyHistoryStep } from '../history';
+import { BlankFlags } from '../utils';
 import {
 	sameLeafStyles,
 	setLeafStyles,
@@ -39,6 +40,8 @@ import {
 } from '../integration';
 
 const { expect } = require('chai');
+
+BlankFlags.DISABLE_RENDER = true;
 
 describe('Leaf', function() {
 	
