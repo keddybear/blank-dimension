@@ -300,10 +300,10 @@ export function markBlankElementDirty( // eslint-disable-line
 		}
 	} else if (instanceOf(e, 'NullLeaf')) {
 		// NullLeaf: DIRTY_CHILDREN -> NullLeaf's prevLeaf or nextLeaf's parent // $FlowFixMe
-		const p = e.prevLeaf.parent || e.nextLeaf.parent;
-		if (p !== null) {
-			markDirtyForRender(p, RenderFlags.DIRTY_CHILDREN);
-			RenderStack.push(p);
+		const l = e.prevLeaf || e.nextLeaf;
+		if (l !== null && l.parent !== null) { // $FlowFixMe
+			markDirtyForRender(l.parent, RenderFlags.DIRTY_CHILDREN); // $FlowFixMe
+			RenderStack.push(l.parent);
 		}
 	} else if (instanceOf(e, 'LeafChain')) {
 		// LeafChain: DIRTY_CHILDREN -> LeafChain's startLeaf's parent // $FlowFixMe
@@ -331,13 +331,15 @@ export function markBlankElementDirty( // eslint-disable-line
 		}
 	} else if (instanceOf(e, 'NullNode')) {
 		// NullNode: DIRTY_CHILDREN -> NullNode's prevNode or nextNode's parent // $FlowFixMe
-		const p = e.prevNode.parent || e.nextNode.parent;
-		if (p !== null) {
-			markDirtyForRender(p, RenderFlags.DIRTY_CHILDREN);
-			RenderStack.push(p);
-		} else {
-			markDirtyForRender(DocumentRoot, RenderFlags.DIRTY_CHILDREN);
-			RenderStack.push(DocumentRoot);
+		const n = e.prevNode || e.nextNode;
+		if (n !== null) {
+			if (n.parent !== null) { // $FlowFixMe
+				markDirtyForRender(n.parent, RenderFlags.DIRTY_CHILDREN); // $FlowFixMe
+				RenderStack.push(n.parent);
+			} else {
+				markDirtyForRender(DocumentRoot, RenderFlags.DIRTY_CHILDREN);
+				RenderStack.push(DocumentRoot);
+			}
 		}
 	} else if (instanceOf(e, 'NodeChain')) {
 		// NodeChain: DIRTY_CHILDREN -> NodeChain's startNode's parent // $FlowFixMe

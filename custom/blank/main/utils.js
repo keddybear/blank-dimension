@@ -25,7 +25,12 @@ export const BlankFlags = {
 			- If true, there's no need to call readyTempHistorySteps() in Complete Action Ops.
 			- Set by Complete Action Op and onSelectionChangeHandler().
 	*/
-	CONTINUOUS_ACTION: false
+	CONTINUOUS_ACTION: false,
+	/*
+		DISABLE_RENDER:
+			- Disable markBlankElementDirty in unchain() for testing.
+	*/
+	DISABLE_RENDER: false
 };
 
 /*

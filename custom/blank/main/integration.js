@@ -639,7 +639,7 @@ export function unchainNode(
 		TempHistoryFutureStep.push(node);
 	}
 	// Mark dirty for rendering
-	markBlankElementDirty(node);
+	if (!BlankFlags.DISABLE_RENDER) markBlankElementDirty(node);
 }
 
 /*
@@ -768,7 +768,7 @@ export function unchainLeaf(leaf: Leaf | NullLeaf | LeafChain | LeafText, past: 
 		TempHistoryFutureStep.push(leaf);
 	}
 	// Mark dirty for rendering
-	markBlankElementDirty(leaf);
+	if (!BlankFlags.DISABLE_RENDER) markBlankElementDirty(leaf);
 }
 
 /*
@@ -823,11 +823,11 @@ export function chainedLeaf(leaf1: Leaf, leaf2: Leaf): number {
 		stop: Node | null
 */
 export function removeNode(
-	node: Node,
+	node: Node | null,
 	stop: Node | null = null,
 	past: boolean = _PAST_STACK_
 ): void {
-	if (node === stop) return;
+	if (node === null || node === stop) return;
 	let n = node;
 	let pn = n.prevNode;
 	let nn = n.nextNode;
@@ -1239,19 +1239,8 @@ export function rechainNode(node: any, fromPast: boolean): void {
 		// Create a new PhantomNode for unchain
 		const pn = new PhantomNode(ref);
 
-		// Modify current chain
-		// Check if needed to remove current chain's parent
-		if (ref.prevNode === null) {
-			// Remove current parent Node
-			removeNode(ref.parent, null, !fromPast);
-		} else {
-			// Cut the ref's prevNode
-			// All Nodes after ref will go with it
-			ref.prevNode.nextNode = null;
-		}
-
-		// Restore parent
-		if (parent !== ref.parent) {
+		// Restore parent (current parent is not old parent)
+		if (ref.parent !== parent) {
 			setParentNode(ref, parent);
 		}
 		// Restore prevNode (nextNode is expected to stay the same)
@@ -1272,8 +1261,20 @@ export function rechainNode(node: any, fromPast: boolean): void {
 		}
 		// Restore nodeType
 		ref.nodeType = nodeType;
-		// Unchain PhantomNode after ref is updated
+
+		// Unchain PhantomNode after restoration for render()
 		unchainNode(pn, !fromPast);
+
+		// Modify old chain
+		// Check if needed to remove old chain's parent
+		if (pn.prevNode === null) {
+			// Remove old parent Node
+			removeNode(pn.parent, null, !fromPast);
+		} else {
+			// Cut the ref's old prevNode
+			// All old Nodes after ref will go with it
+			pn.prevNode.nextNode = null;
+		}
 	} else if (instanceOf(n, 'PhantomChain')) {
 		const { startNode, endNode, prevNode, nextNode } = n;
 		const startRef = startNode.ref;
@@ -1284,24 +1285,8 @@ export function rechainNode(node: any, fromPast: boolean): void {
 			endNode: new PhantomNode(endRef)
 		});
 
-		// Modify current chain
-		// Check if needed to remove current chain's parent
-		if (startRef.prevNode === null && endRef.nextNode === null) {
-			// Remove current parent node
-			removeNode(startRef.parent, null, !fromPast);
-		} else {
-			if (startRef.prevNode === null) {
-				setFirstChild(startRef.parent, endRef.nextNode);
-			} else {
-				startRef.prevNode.nextNode = endRef.nextNode;
-			}
-			if (endRef.nextNode !== null) {
-				endRef.nextNode.prevNode = startRef.prevNode;
-			}
-		}
-
-		// Restore parent
-		if (startNode.parent !== startRef.parent) {
+		// Restore parent (startNode's current parent is not startNode's old parent)
+		if (startRef.parent !== startNode.parent) {
 			let cn = startRef;
 			while (cn !== null) {
 				cn.parent = startNode.parent;
@@ -1354,8 +1339,25 @@ export function rechainNode(node: any, fromPast: boolean): void {
 		// Restore nodeType
 		startRef.nodeType = startNode.nodeType;
 		endRef.nodeType = endNode.nodeType;
-		// Unchain PhantomChain after startRef and endRef are updated
+
+		// Unchain PhantomChain after restoration for render()
 		unchainNode(pc, !fromPast);
+
+		// Modify old chain
+		// Check if needed to remove old chain's parent // $FlowFixMe
+		if (pc.startNode.prevNode === null && pc.endNode.nextNode === null) {
+			// Remove old parent node // $FlowFixMe
+			removeNode(pc.startNode.parent, null, !fromPast);
+		} else { // $FlowFixMe
+			if (pc.startNode.prevNode === null) { // $FlowFixMe
+				setFirstChild(pc.startNode.parent, pc.endNode.nextNode);
+			} else { // $FlowFixMe
+				pc.startNode.prevNode.nextNode = pc.endNode.nextNode;
+			} // $FlowFixMe
+			if (pc.endNode.nextNode !== null) { // $FlowFixMe
+				pc.endNode.nextNode.prevNode = pc.startNode.prevNode;
+			}
+		}
 	} else if (instanceOf(n, 'NodeChain')) {
 		const { prevNode, nextNode, startNode, endNode } = n;
 		const { parent } = startNode;
@@ -2750,6 +2752,14 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 					startNode: lastPhantom, // $FlowFixMe
 					endNode: new PhantomNode(currentNode)
 				});
+				// Switch current Node onto the GrowPoint with nextNode as null // $FlowFixMe
+				currentNode.prevNode = GrowPoint; // $FlowFixMe
+				GrowPoint.nextNode = currentNode; // $FlowFixMe
+				currentNode.parent = GrowPoint.parent; // $FlowFixMe
+				currentNode.nodeType = GrowType; // $FlowFixMe
+				currentNode.nextNode = null;
+				// Unchain PhantomChain after currentNode is updated
+				unchainNode(pc, _PAST_STACK_);
 				// Check if needed to remove old parent
 				if (tempPrev === null && tempNext === null) { // $FlowFixMe
 					removeNode(tempParent);
@@ -2763,14 +2773,6 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 						tempNext.prevNode = tempPrev;
 					}
 				}
-				// Switch current Node onto the GrowPoint with nextNode as null // $FlowFixMe
-				currentNode.prevNode = GrowPoint; // $FlowFixMe
-				GrowPoint.nextNode = currentNode; // $FlowFixMe
-				currentNode.parent = GrowPoint.parent; // $FlowFixMe
-				currentNode.nodeType = GrowType; // $FlowFixMe
-				currentNode.nextNode = null;
-				// Unchain PhantomChain after currentNode is updated
-				unchainNode(pc, _PAST_STACK_);
 			}
 			// Set current Node as the new GrowPoint
 			GrowPoint = currentNode;
@@ -2786,6 +2788,14 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 				startNode: lastPhantom, // $FlowFixMe
 				endNode: new PhantomNode(currentNode)
 			});
+			// Switch current Node onto the GrowPoint with nextNode as null // $FlowFixMe
+			currentNode.prevNode = GrowPoint; // $FlowFixMe
+			GrowPoint.nextNode = currentNode; // $FlowFixMe
+			currentNode.parent = GrowPoint.parent; // $FlowFixMe
+			currentNode.nodeType = GrowType; // $FlowFixMe
+			currentNode.nextNode = null;
+			// Unchain PhantomChain after currentNode is updated
+			unchainNode(pc, _PAST_STACK_);
 			// Check if needed to remove old parent
 			if (tempPrev === null && tempNext === null) { // $FlowFixMe
 				removeNode(tempParent);
@@ -2799,14 +2809,6 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 					tempNext.prevNode = tempPrev;
 				}
 			}
-			// Switch current Node onto the GrowPoint with nextNode as null // $FlowFixMe
-			currentNode.prevNode = GrowPoint; // $FlowFixMe
-			GrowPoint.nextNode = currentNode; // $FlowFixMe
-			currentNode.parent = GrowPoint.parent; // $FlowFixMe
-			currentNode.nodeType = GrowType; // $FlowFixMe
-			currentNode.nextNode = null;
-			// Unchain PhantomChain after currentNode is updated
-			unchainNode(pc, _PAST_STACK_);
 			// If growing on the "middle", update middleEnd and middleNext.
 			// middleNext is the last Node's original next Node, if its new parent
 			// is the same as that next Node's parent. Otherwise, middleNext is null.

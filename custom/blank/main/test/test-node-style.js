@@ -2,7 +2,7 @@
 import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../node';
 import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink } from '../leaf';
 import { History, BlankHistoryStep } from '../history';
-import { instanceOf } from '../utils';
+import { instanceOf, BlankFlags } from '../utils';
 import {
 	sameNodeStyles,
 	setNodeStyles,
@@ -43,6 +43,8 @@ import {
 } from '../integration';
 
 const { expect } = require('chai');
+
+BlankFlags.DISABLE_RENDER = true;
 
 describe('Basic Node Ops', function() {
 
