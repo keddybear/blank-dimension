@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<style>
+		*, *:before, *:after {
+			box-sizing: border-box;
+		}
+		*:active, *:focus, *:visited {
+			outline: none;
+		}
+		body {
+			margin: 0;
+			padding: 0;
+		}
+		#blank-editor-container {
+			padding-top: 50px;
+		}
+		.noselect {
+			-webkit-touch-callout: none; /* iOS Safari */
+			-webkit-user-select: none; /* Safari */
+			-khtml-user-select: none; /* Konqueror HTML */
+			-moz-user-select: none; /* Firefox */
+			-ms-user-select: none; /* Internet Explorer/Edge */
+			user-select: none; /* Non-prefixed version, currently supported by Chrome and Opera */
+		}
+		.blank-editor {
+			outline: none;
+			white-space: pre-wrap;
+			overflow-wrap: break-word;
+			-webkit-user-modify: read-write-plaintext-only;
+		}
+		.blank-container {
+			font-size: 18px;
+			line-height: 1.6em;
+			font-family: Cambria, Georgia, serif;
+		}
+		.blank-container > div {
+			position: relative;
+			max-width: 700px;
+			margin-left: auto;
+			margin-right: auto;
+		}
+		.blank-container > div + div {
+			margin-top: 1em;
+		}
+		.blank-container .p {
+			text-indent: 2em;
+		}
+		.blank-container img {
+			width: 100%;
+			height: auto;
+			display: block;
+		}
+		.weird-node {
+			text-indent: 0em !important;
+		}
+		.weird-node > div {
+			border-left: 5px solid rgb(255, 165, 0);
+			padding-left: 30px;
+			padding-top: 10px;
+			padding-bottom: 10px;
+			padding-right: 20px;
+			background-color: rgba(255,165,0,0.2);
+		}
+		.weird-leaf .date {
+			color: grey;
+			padding-top: 20px;
+			text-align: right;
+		}
+		[data-leaf-content] input {
+			cursor: pointer;
+			background: transparent;
+			border: none;
+			position: absolute;
+			width: 100%;
+			height: 100%;
+			top: 0;
+			left: 0;
+			transition: box-shadow 0.4s;
+		}
+		input.active {
+			box-shadow: 0 10px 40px -6px rgba(0, 0, 0, 0.8);
+		}
+	</style>
+</head>
+<body>
+	<div id='blank-editor-container'>
+		<div class='blank-editor' contentEditable='true' role='textbox'	spellCheck='false' autoCorrect='on' data-gramma='false'><div class='blank-container'><div class='p' data-node-key='1'><span data-leaf-key='2' data-leaf-text>Provident beatae deserunt aut soluta rerum aut voluptas perspiciatis. Exercitationem porro expedita dolorem. Sed dolores ut illum veritatis.</span></div><div class='p' data-node-key='3'><span data-leaf-key='4' data-leaf-text>Consequuntur optio sit </span><span data-leaf-key='22' style='font-weight: bold'>dolore. Et maiores dignissimos</span><span data-leaf-key='23'> similique fuga illo. Natus voluptatum aspernatur vitae est nihil ut illo. Velit dicta fuga aperiam rerum impedit exercitationem ea.</span></div><div class='p' data-node-key='5'><span data-leaf-key='6' data-leaf-text>&#65279;</span></div><div class='p weird-node' data-node-key='7'><div class='weird-leaf'><div><span data-leaf-key='8' data-leaf-text>Sit pariatur molestias ut. Voluptatem modi sed est nihil ut. Nihil rerum sit velit ut asperiores deleniti quam.</span></div><div contentEditable='false' class='date noselect'>12/13/2018</div></div></div><div class='p' data-node-key='9'><span data-leaf-key='10' data-leaf-text>Sit ea blanditiis consequuntur commodi. Aperiam necessitatibus eos. Occaecati asperiores sapiente omnis omnis quia dolores sint amet et. Minima repellat qui sed beatae dolorum dolorum accusamus voluptas amet. Non ut at quidem nesciunt.</span></div><div data-node-key='11'><div data-leaf-key='12' data-leaf-content><div contenteditable='false'><img src='http://doanarae.com/doanarae/9646-long-wallpaper-for-2-monitors_35719.jpg'/></div><input readonly></div></div><div data-node-key='13'><ul><li data-node-key='14'><span data-leaf-key='15' data-leaf-text>Sit pariatur molestias ut.</span></li><li data-node-key='16'><span data-leaf-key='17' data-leaf-text>&#65279;</span></li><li data-node-key='18'><span data-leaf-key='19' data-leaf-text>Quas sint aliquid ipsam consequatur. Rerum doloremque nemo eum dolores qui non aliquam quis voluptas. Mollitia ipsum vel vero. Dolorem in nam praesentium. Veritatis quo eaque quas aut. Aliquam ipsam possimus fuga ipsa soluta commodi sint.</span></li></ul></div><div class='p' data-node-key='20'><span data-leaf-key='21' data-leaf-text>Et aut omnis soluta animi est. Exercitationem rerum impedit ullam dolore temporibus. Assumenda ut quo provident doloremque fugiat modi quia provident inventore. Animi consequatur aliquid ut nobis. Iusto accusantium sed repellat consectetur amet delectus voluptatem.</span></div></div></div>
+	</div>
+<script>
+// // Get range
+// const startEl = document.querySelector('[data-leaf-key="12"]');
+// const endEl = document.querySelector('[data-leaf-key="12"]');
+// const range = document.createRange();
+// range.setStart(startEl, startEl.children.length);
+// range.setEnd(endEl, endEl.children.length);
+
+// // Add range
+// const sel = window.getSelection();
+// sel.removeAllRanges();
+// sel.addRange(range);
+
+// const container = document.getElementById('blank-editor-container');
+// container.addEventListener('focusin', (e) => {
+// 	const { target } = e;
+// 	if (target && target !== container && target.tagName && target.tagName === 'INPUT') {
+// 		console.log('focus in', target);
+// 		target.className = 'active';
+// 	}
+// 	e.preventDefault();
+// 	e.stopPropagation();
+// });
+// container.addEventListener('focusout', (e) => {
+// 	const { target } = e;
+// 	if (target && target !== container && target.tagName && target.tagName === 'INPUT') {
+// 		console.log('focus out', target);
+// 		target.className = '';
+// 	}
+// 	e.preventDefault();
+// 	e.stopPropagation();
+// });
+
+document.onselectionchange = () => {
+	const selection = window.getSelection();
+	console.log('anchor', selection.anchorNode);
+	console.log('anchor offset', selection.anchorOffset);
+	if (selection.anchorNode.parentNode) {
+		console.log('anchor parent', selection.anchorNode.parentNode);
+	}
+	console.log('focus', selection.focusNode);
+	console.log('focus offset', selection.focusOffset);
+	if (selection.focusNode.parentNode) {
+		console.log('focus parent', selection.focusNode.parentNode);
+	}
+	// console.log(selection.rangeCount);
+};
+</script>
+</body>
+</html>

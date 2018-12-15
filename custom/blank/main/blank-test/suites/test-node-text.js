@@ -1,8 +1,8 @@
 /* eslint-disable */
-import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../node';
-import { Leaf, isZeroLeaf, LeafStyles, CaretStyle, applyCaretStyle, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from '../leaf';
-import { History, BlankHistoryStep } from '../history';
-import { instanceOf } from '../utils';
+import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../../node';
+import { Leaf, isZeroLeaf, LeafStyles, CaretStyle, applyCaretStyle, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from '../../leaf';
+import { History, BlankHistoryStep } from '../../history';
+import { instanceOf } from '../../utils';
 import {
 	getPrevLeafChain,
 	sameNodeStyles,
@@ -40,7 +40,7 @@ import {
 	_DELETE_,
 	_BACKSPACE_,
 	applyBranchText
-} from '../integration';
+} from '../../integration';
 
 const { expect } = require('chai');
 

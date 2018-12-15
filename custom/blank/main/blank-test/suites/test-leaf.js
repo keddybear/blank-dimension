@@ -1,8 +1,8 @@
 /* eslint-disable */
-import { Node, DocumentRoot } from '../node';
-import { Leaf, isZeroLeaf, LeafStyles, NullLeaf, LeafChain, ParentLink } from '../leaf';
-import { History, BlankHistoryStep, copyHistoryStep } from '../history';
-import { BlankFlags } from '../utils';
+import { Node, DocumentRoot } from '../../node';
+import { Leaf, isZeroLeaf, LeafStyles, NullLeaf, LeafChain, ParentLink } from '../../leaf';
+import { History, BlankHistoryStep, copyHistoryStep } from '../../history';
+import { BlankFlags } from '../../utils';
 import {
 	sameLeafStyles,
 	setLeafStyles,
@@ -37,7 +37,7 @@ import {
 	readyTempHistorySteps,
 	undo,
 	redo
-} from '../integration';
+} from '../../integration';
 
 const { expect } = require('chai');
 

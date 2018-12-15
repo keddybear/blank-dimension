@@ -1,8 +1,8 @@
 /* eslint-disable */
-import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../node';
-import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink } from '../leaf';
-import { History, BlankHistoryStep } from '../history';
-import { instanceOf, BlankFlags } from '../utils';
+import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../../node';
+import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink } from '../../leaf';
+import { History, BlankHistoryStep } from '../../history';
+import { instanceOf, BlankFlags } from '../../utils';
 import {
 	sameNodeStyles,
 	setNodeStyles,
@@ -40,7 +40,7 @@ import {
 	applyBranchType,
 	applyNodeStyle,
 	applyNodesStyle
-} from '../integration';
+} from '../../integration';
 
 const { expect } = require('chai');
 

@@ -1,4 +1,12 @@
 // @flow
+/*
+	This is where you render all Node types. Each Node type must comply with the
+	following:
+
+	1. The root element must have a "node-key" data attribute.
+	2. The root element must be stored in "selectRef".
+	3. The component must render "chain".
+*/
 import * as React from 'react';
 
 // Blank Element imports

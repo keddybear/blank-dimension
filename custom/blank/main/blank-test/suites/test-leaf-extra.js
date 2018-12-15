@@ -1,6 +1,6 @@
 /* eslint-disable */
-import { Leaf, isZeroLeaf, LeafStyles, NullLeaf, LeafChain, LeafText } from '../leaf';
-import { History, BlankHistoryStep } from '../history';
+import { Leaf, isZeroLeaf, LeafStyles, NullLeaf, LeafChain, LeafText } from '../../leaf';
+import { History, BlankHistoryStep } from '../../history';
 import {
 	_PAST_STACK_,
 	_FUTURE_STACK_,
@@ -24,7 +24,7 @@ import {
 	readyHistoryStep,
 	readyTempHistorySteps,
 	mergeLeafTexts
-} from '../integration';
+} from '../../integration';
 
 const { expect } = require('chai');
 

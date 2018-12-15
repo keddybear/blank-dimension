@@ -145,7 +145,6 @@ export class Node {
 	*/
 	styles: NodeStyles | null;
 	nodeType: number;
-	branchType: Array<number> | null; // TODO
 	prevNode: Node | null;
 	nextNode: Node | null;
 	firstChild: any | null;
@@ -174,13 +173,6 @@ export class Node {
 
 		// Once created, Node is always new
 		this.new = true;
-
-		// This value is only assigned after render() and when the firstChild is a Leaf.
-		// It remembers the shallow BranchType for its child, so that when applying a new
-		// BranchType to a selection of LeafChains, the shallow comparison is faster.
-		// If this is implemented, findNextLeafChain() no longer needs to return BranchType.
-		// (TODO)
-		this.branchType = null;
 
 		// Identity check
 		this.Node = true;

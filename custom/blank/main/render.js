@@ -178,22 +178,26 @@ class BlankRenderQueue {
 		If a Node or Leaf is already in queue, pushing it will move it to the end of the
 		queue.
 
-		BlankRenderQueue does not have a clear() method because it needs to set all elements'
-		renderPos to null. It would be the same as popping til empty. And render() should
+		BlankRenderQueue's clear() method only clears the stack when there are only undefined
+		values left, because it needs to set all elements' renderPos to null. render() should
 		clear the queue.
 	*/
 
 	/*
 		@ attributes
 		queue: Array<Node | RootNode | Leaf>
+		realSize: number
 	*/
 	queue: Array<Node | RootNode | Leaf>;
+	realSize: number;
 
 	/*
 		@ methods
 		push
 		pop
+		length
 		size
+		clear
 	/*
 		constructor
 	*/
@@ -204,6 +208,7 @@ class BlankRenderQueue {
 		RenderStackExists = true;
 
 		this.queue = [];
+		this.realSize = 0;
 	}
 
 	/*
@@ -225,6 +230,7 @@ class BlankRenderQueue {
 		} else {
 			el.renderPos = this.queue.length; // eslint-disable-line
 			this.queue.push(el);
+			this.realSize += 1;
 		}
 	}
 
@@ -242,18 +248,38 @@ class BlankRenderQueue {
 		}
 		if (typeof el === 'object' && el.renderPos !== undefined) {
 			el.renderPos = null;
+			this.realSize -= 1;
 		}
 		return el;
 	}
 
 	/*
+		length:
+			- Get the length of the queue, including undefined values.
+		@ return
+			len: number
+	*/
+	length(): number {
+		return this.queue.length;
+	}
+
+	/*
 		size:
-			- Get the size of the queue.
+			- Get the size of the queue, ignoring undefined values.
 		@ return
 			size: number
 	*/
 	size(): number {
-		return this.queue.length;
+		return this.realSize;
+	}
+
+	/*
+		clear:
+			- Clear the queue by setting its length to 0.
+			- Do nothing if there's still Blank Elements in the queue.
+	*/
+	clear(): void {
+		if (this.realSize === 0) this.queue.length = 0;
 	}
 }
 
@@ -552,4 +578,6 @@ export function render(): void {
 			}
 		}
 	}
+	// Cleanup - remaining values are undefined
+	RenderStack.clear();
 }

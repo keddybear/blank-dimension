@@ -1,0 +1,17 @@
+[data-leaf-content] {
+	input {
+		cursor: pointer;
+		background: transparent;
+		border: none;
+		position: absolute;
+		width: 100%;
+		height: 100%;
+		top: 0;
+		left: 0;
+		transition: box-shadow 0.4s;
+	}
+
+	input.active {
+		box-shadow: 0 10px 40px -6px rgba(0, 0, 0, 0.8);
+	}
+}
