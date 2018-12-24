@@ -8,9 +8,9 @@
 	   "leaf-text" attribute and it must be stored in "selectRef".
 	2. If Leaf is a non-text Leaf, its root element must have a "leaf-key" data
 	   attribute, a "leaf-content" attribute, it must be stored in "selectRef",
-	   and it must have a ready-only input field to capture selection, alongside
-	   its leaf-content wrapper. The wrapper must have a "contenteditable=false"
-	   attribute.
+	   and it must have a ready-only input field as the last child to capture
+	   selection, alongside its leaf-content wrapper. The wrapper must have a
+	   "contenteditable=false" attribute.
 */
 import * as React from 'react';
 
@@ -59,10 +59,10 @@ function renderLeaf(leaf: Leaf, selectRef: Object) {
 			};
 			return (
 				<div {...props} ref={selectRef}>
-					<div contentEditable='false'>
+					<div contentEditable='false' suppressContentEditableWarning>
 						<img {...imgProps} alt='Source not found' />
 					</div>
-					<input readyOnly />
+					<input readOnly />
 				</div>
 			);
 		}
@@ -75,7 +75,7 @@ function renderLeaf(leaf: Leaf, selectRef: Object) {
 			};
 			return (
 				<span {...props} style={style} ref={selectRef}>
-					{ isZeroLeaf(leaf) ? '&#65279;' : leaf.text }
+					{ isZeroLeaf(leaf) ? '\u200b' : leaf.text }
 				</span>
 			);
 		}

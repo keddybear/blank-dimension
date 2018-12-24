@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 // Blank Element imports
-import { Node, DocumentRoot } from '../node';
+import { Node, RootNode } from '../node';
 import { Leaf } from '../leaf';
 import { instanceOf } from '../utils';
 
@@ -43,49 +43,48 @@ function renderChain( // eslint-disable-line
 	return result;
 }
 
-type ChainProps = {	firstChild: Node | Leaf, chainRef: Object };
+type ChainProps = {	parent: Node | RootNode, chainRef: Object };
 type ChainState = { update: boolean };
 
 class ChainComponent extends React.Component<ChainProps, ChainState> {
 	/*
 		@ attributes
 		first: Node | Leaf
+		parent: Node | null
 		props: ChainProps
 		state: ChainState
 	*/
 
-	first: Node | Leaf; // eslint-disable-line
+	parent: Node | RootNode; // eslint-disable-line
 
 	constructor(props: ChainProps) {
 		super(props);
-		this.first = this.props.firstChild;
+		this.parent = this.props.parent;
 		this.state = { update: false };
 		// Update parent's chainRef
 		this.props.chainRef.current = this;
 	}
 
-	shouldComponentUpdate(): boolean {
+	shouldComponentUpdate(nextProps: ChainProps, nextState: ChainState): boolean {
 		// ChainComponent setState is called by render(), not by its parent.
 		// If its parent is DIRTY_CHILDREN, render() will call setState on
 		// the ChainComponent directly.
-		if (this.state.update !== true) return false;
-		this.state.update = false;
-		if (this.first.parent === null) {
-			if (DocumentRoot.dirty === RenderFlags.DIRTY_CHILDREN) {
-				DocumentRoot.dirty = RenderFlags.CLEAN;
-				return true;
-			}
-		} else if (this.first.parent.dirty === RenderFlags.DIRTY_CHILDREN) {
-			this.first.parent.dirty = RenderFlags.CLEAN;
+		if (nextState.update !== true) return false;
+		if (this.parent.dirty === RenderFlags.DIRTY_CHILDREN) {
+			this.parent.dirty = RenderFlags.CLEAN;
 			return true;
 		}
 		return false;
 	}
 
+	componentDidUpdate() {
+		this.state.update = false;
+	}
+
 	render() {
 		return (
 			<React.Fragment>
-				{ renderChain(this.first) }
+				{ renderChain(this.parent.firstChild) }
 			</React.Fragment>
 		);
 	}

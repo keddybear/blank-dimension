@@ -154,6 +154,23 @@
 	explicitly is required.
 */
 
+/*
+	~ Complete Render Cycle ~
+
+	1. onSelectionChange:
+		- If SELECTION_FROM_BS is true, BAS becomes PAS.
+		- If not, BAS becomes the current BlankSelection.
+			- CONTINUOUS_ACTION is set to false.
+	2. Perform Actions on BAS.
+		- Set IS_COMPOSING to true.
+		- Actions will unchain Nodes and Leaves. In unchain(), markBlankElementDirty() will
+		  push dirty Blank Elements into RenderStack.
+	3. After all Actions are complete, render() will go through RenderStack and call
+	   setState({ update: true }) on each dity Blank Element.
+	   	- Actual rendering is handled by Blank Components.
+	4. After rendering is done, set window selection and BAS from PAS.
+*/
+
 // @flow
 import { Node, NullNode, NodeChain, NodeStyles, NodeType, PhantomNode, PhantomChain, RootNode, DocumentRoot } from './node';
 import { Leaf, NullLeaf, LeafChain, ParentLink, LeafText } from './leaf';
@@ -181,15 +198,25 @@ class BlankRenderQueue {
 		BlankRenderQueue's clear() method only clears the stack when there are only undefined
 		values left, because it needs to set all elements' renderPos to null. render() should
 		clear the queue.
+
+		A low priority queue stores Blank Elements that are DIRTY_SELF. Its elements will be
+		popped after the main queue is emptied.
+
+		If a Blank Element is changed from DIRTY_SELF to DIRTY, it will be moved from the
+		low priority to the main queue. Its original position will be replaced by undefined.
 	*/
 
 	/*
 		@ attributes
 		queue: Array<Node | RootNode | Leaf>
+		queueLow: Array<Node | RootNode | Leaf>
+		realMainSize: number
+		realLowSize: number
 		realSize: number
 	*/
-	queue: Array<Node | RootNode | Leaf>;
-	realSize: number;
+	queue: Array<?Node | ?RootNode | ?Leaf>;
+	queueLow: Array<?Node | ?RootNode | ?Leaf>;
+	realSize: { high: number, low: number };
 
 	/*
 		@ methods
@@ -208,7 +235,8 @@ class BlankRenderQueue {
 		RenderStackExists = true;
 
 		this.queue = [];
-		this.realSize = 0;
+		this.queueLow = [];
+		this.realSize = { high: 0, low: 0 };
 	}
 
 	/*
@@ -217,20 +245,48 @@ class BlankRenderQueue {
 			- If the Node or Leaf's renderPos is not null, delete the element at RenderPos,
 			  push the Node or Leaf, and update their renderPos.
 				- Do nothing if the Node or Leaf is already at the end of the queue.
+			- If DIRTY_SELF, push it into the low queue. If DIRTY or DIRTY_CHILDREN, push
+			  it in the main queue.
+				- If DIRTY element exists in low queue, move it to the main queue and
+				  replace its original position with undefined.
 		@ params
 			el: Node | Leaf
 	*/
 	push(el: Node | Leaf | RootNode): void {
+		let q = this.queue;
+		let oq = this.queueLow;
+		let qc = 'high';
+		let oqc = 'low';
+		if (el.dirty === RenderFlags.DIRTY_SELF) {
+			q = this.queueLow;
+			oq = this.queue;
+			qc = 'low';
+			oqc = 'high';
+		}
+
+		// Check if el already exists in a queue
 		if (el.renderPos !== null) {
-			if (el.renderPos !== this.queue.length - 1) {
-				delete this.queue[el.renderPos];
-				el.renderPos = this.queue.length; // eslint-disable-line
-				this.queue.push(el);
+			if (q.length === 0 || el.renderPos !== q.length - 1) {
+				// Check if el is in a different queue
+				if (q[el.renderPos] === el) {
+					q[el.renderPos] = undefined;
+				} else {
+					if (oq[el.renderPos] !== el) {
+						throw new Error('A Blank Element has renderPos but is not in any render queue.');
+					}
+					oq[el.renderPos] = undefined;
+					this.realSize[qc] += 1;
+					this.realSize[oqc] -= 1;
+				}
+				el.renderPos = q.length; // eslint-disable-line
+				// $FlowFixMe
+				q.push(el);
 			}
 		} else {
-			el.renderPos = this.queue.length; // eslint-disable-line
-			this.queue.push(el);
-			this.realSize += 1;
+			el.renderPos = q.length; // eslint-disable-line
+			// $FlowFixMe
+			q.push(el);
+			this.realSize[qc] += 1;
 		}
 	}
 
@@ -238,17 +294,29 @@ class BlankRenderQueue {
 		pop:
 			- Pop the next Node or Leaf, skipping undefined. And set their renderPos to
 			  null.
+			- Pop from the main queue, then the low priority queue.
 		@ return
 			el: Node | Leaf | RootNode | undefined
 	*/
 	pop(): ?Node | ?Leaf | ?RootNode {
 		let el;
-		while (!el && this.queue.length > 0) {
+		// Pop from the main queue first
+		while (!el && this.realSize.high > 0) {
 			el = this.queue.pop();
+			if (el !== undefined) {
+				this.realSize.high -= 1;
+			}
 		}
-		if (typeof el === 'object' && el.renderPos !== undefined) {
+		// Pop from the low priority queue
+		while (!el && this.realSize.low > 0) {
+			el = this.queueLow.pop();
+			if (el !== undefined) {
+				this.realSize.low -= 1;
+			}
+		}
+		// Reduce size counter by 1
+		if (el && typeof el === 'object' && el.renderPos !== undefined) {
 			el.renderPos = null;
-			this.realSize -= 1;
 		}
 		return el;
 	}
@@ -270,7 +338,7 @@ class BlankRenderQueue {
 			size: number
 	*/
 	size(): number {
-		return this.realSize;
+		return this.realSize.high + this.realSize.low;
 	}
 
 	/*
@@ -279,7 +347,8 @@ class BlankRenderQueue {
 			- Do nothing if there's still Blank Elements in the queue.
 	*/
 	clear(): void {
-		if (this.realSize === 0) this.queue.length = 0;
+		if (this.realSize.high === 0) this.queue.length = 0;
+		if (this.realSize.low === 0) this.queueLow.length = 0;
 	}
 }
 
@@ -342,7 +411,7 @@ export function markBlankElementDirty( // eslint-disable-line
 		// LeafText: DIRTY_SELF -> Leaf // $FlowFixMe
 		const l = e.leaf;
 		if (l !== null) {
-			markDirtyForRender(l, RenderFlags.DIRTY_CHILDREN);
+			markDirtyForRender(l, RenderFlags.DIRTY_SELF);
 			RenderStack.push(l);
 		}
 	} else if (instanceOf(e, 'Node')) {
@@ -548,12 +617,12 @@ export function render(): void {
 					}
 					case RenderFlags.DIRTY_CHILDREN: {
 						if (instanceOf(el, 'RootNode')) { // $FlowFixMe
-							if (comp.chainRef) { // $FlowFixMe
-								comp.chainRef.setState({ update: true });
+							if (comp.chainRef.current) { // $FlowFixMe
+								comp.chainRef.current.setState({ update: true });
 							}
 						} else if (instanceOf(el, 'Node')) { // $FlowFixMe
-							if (comp.chainRef) { // $FlowFixMe
-								comp.chainRef.setState({ update: true });
+							if (comp.chainRef.current) { // $FlowFixMe
+								comp.chainRef.current.setState({ update: true });
 							}
 						} else {
 							// Clean dirty just in case

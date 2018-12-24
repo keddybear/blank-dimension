@@ -15,7 +15,7 @@ import { Node, NodeTypes, NodeDataAttributes } from '../../node';
 // Style imports // $FlowFixMe
 import './styles/basic.scss';
 
-const { PARAGRAPH } = NodeTypes;
+const { PARAGRAPH, ORDERED_LIST, UNORDERED_LIST, LIST_ITEM } = NodeTypes;
 const { NODE_KEY_ATTR } = NodeDataAttributes;
 
 /*
@@ -29,6 +29,24 @@ const { NODE_KEY_ATTR } = NodeDataAttributes;
 function renderNode(node: Node, selectRef: Object, chain: React.Element<*> | null) {
 	const type = node.nodeType;
 	switch (type) {
+		case ORDERED_LIST: {
+			const props = {
+				[NODE_KEY_ATTR]: node.id.toString()
+			};
+			return <ol {...props} ref={selectRef}>{ chain }</ol>;
+		}
+		case UNORDERED_LIST: {
+			const props = {
+				[NODE_KEY_ATTR]: node.id.toString()
+			};
+			return <ul {...props} ref={selectRef}>{ chain }</ul>;
+		}
+		case LIST_ITEM: {
+			const props = {
+				[NODE_KEY_ATTR]: node.id.toString()
+			};
+			return <li {...props} ref={selectRef}>{ chain }</li>;
+		}
 		case PARAGRAPH:
 		default: {
 			const props = {

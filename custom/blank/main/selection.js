@@ -114,10 +114,10 @@ function getNearestLeafSelection(node: Node, offset: number): LeafSelection | nu
 	// Find either Leaf text or Leaf content
 	while (n) {
 		if (n instanceof HTMLElement) {
-			if (n.dataset[LEAF_TEXT_CAMEL]) {
+			if (n.dataset[LEAF_TEXT_CAMEL] !== undefined) {
 				el = n;
 				break;
-			} else if (n.dataset[LEAF_CONTENT_CAMEL]) {
+			} else if (n.dataset[LEAF_CONTENT_CAMEL] !== undefined) {
 				el = n;
 				break;
 			}
@@ -375,12 +375,10 @@ export function setWindowSelection(selection: BlankSelection) {
 	if (selection.start === null || selection.end === null) return;
 
 	const { start, end } = selection;
-	// Do nothing is either selected Leaf is non-text
-	if (!isTextLeaf(start.leaf) || !isTextLeaf(end.leaf)) return;
-	// Get startNode and endNode (DOM) using ReactMap
+	// Get startNode and endNode (DOM) using ReactMap // $FlowFixMe
 	const sComp = ReactMap.get(start.leaf);
 	if (!sComp) return; // $FlowFixMe
-	if (!sComp.selectRef) return;
+	if (!sComp.selectRef) return; // $FlowFixMe
 	const eComp = ReactMap.get(end.leaf);
 	if (!eComp) return; // $FlowFixMe
 	if (!eComp.selectRef) return;
@@ -403,7 +401,7 @@ export function setWindowSelection(selection: BlankSelection) {
 		anchorOffset = start.range[0]; // eslint-disable-line
 	} else {
 		anchorNode = s;
-		anchorOffset = s.children.length;
+		anchorOffset = s.children.length - 1;
 	}
 
 	// Get focusNode and focusOffset
@@ -412,7 +410,7 @@ export function setWindowSelection(selection: BlankSelection) {
 		focusOffset = end.range[1]; // eslint-disable-line
 	} else {
 		focusNode = e;
-		focusOffset = e.children.length;
+		focusOffset = e.children.length - 1;
 	}
 
 	if (anchorNode !== null && focusNode !== null) {

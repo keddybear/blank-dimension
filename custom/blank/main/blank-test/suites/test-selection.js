@@ -46,8 +46,7 @@ import {
 	applyNodesStyle,
 	applyLeavesStyle
 } from '../../integration';
-
-const { expect } = require('chai');
+import { expect } from 'chai';
 
 /*
 	copyBranchText

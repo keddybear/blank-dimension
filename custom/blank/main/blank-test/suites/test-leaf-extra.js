@@ -25,8 +25,7 @@ import {
 	readyTempHistorySteps,
 	mergeLeafTexts
 } from '../../integration';
-
-const { expect } = require('chai');
+import { expect } from 'chai';
 
 describe('Leaf Action Helpers', function() {
 	

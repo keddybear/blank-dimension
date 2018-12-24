@@ -94,6 +94,13 @@ export const LeafDataAttributes = {
 
 export class Leaf {
 	/*
+		A Leaf can a text Leaf or non-text Leaf.
+
+		A non-text Leaf cannot have prevLeaf or nextLeaf, and it cannot have more than one
+		Node. This must be enforced manually.
+	*/
+
+	/*
 		@ attributes
 		text: String - default: '\u200b' (zero-width space)
 		styles: LeafStyles object - default: new LeafStyles()

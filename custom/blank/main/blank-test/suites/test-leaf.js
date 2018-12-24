@@ -38,8 +38,7 @@ import {
 	undo,
 	redo
 } from '../../integration';
-
-const { expect } = require('chai');
+import { expect } from 'chai';
 
 BlankFlags.DISABLE_RENDER = true;
 
@@ -1511,6 +1510,140 @@ describe('Leaf chaining & advanced operations', function() {
 				expect(cl.styles.underline).to.be.true;
 				expect(cl.nextLeaf).to.equal(null);
 			expect(cn.nextNode).to.equal(null);
+
+			done();
+		});
+
+	});
+
+	describe('applyLeavesStyle - consume a mix of new and old Nodes', function() {
+
+		const l1 = new Leaf({ text: 'Leaf 1' });
+		const l2 = new Leaf({ text: 'Leaf 2', styles: new LeafStyles({ bold: true }) });
+		const l3 = new Leaf({ text: 'Leaf 3' });
+		const l4 = new Leaf({ text: 'Leaf 4', styles: new LeafStyles({ italic: true }) });
+		const l5 = new Leaf({ text: 'Leaf 5', styles: new LeafStyles({ bold: true }) });
+		const l6 = new Leaf({ text: 'Leaf 6' });
+
+		const n1 = new Node({ nodeType: 0 });
+
+		/*
+			(root)---(0)---<l1-l2-l3-l4-l5-l6>
+		*/
+		before(function(done) {
+			DocumentRoot.firstChild = null;
+			History.clear(_PAST_STACK_);
+			History.clear(_FUTURE_STACK_);
+			TempHistoryPastStep.clear();
+			TempHistoryFutureStep.clear();
+			
+			setParentLink(n1, null);
+				setParentLink(l1, n1);
+				chainLeaf(l2, l1);
+				chainLeaf(l3, l2);
+				chainLeaf(l4, l3);
+				chainLeaf(l5, l4);
+				chainLeaf(l6, l5);
+
+
+			n1.new = false;
+
+			l1.new = false;
+			l2.new = false;
+			l3.new = false;
+			l4.new = false;
+			l5.new = false;
+			l6.new = false;
+
+			done();
+		});
+
+		it('Make "1" of "Leaf 1" to "Leaf" of "Leaf 6" bold', function(done) {
+			const newStyles = { bold: true };
+			const selections = [{
+				leaf: l1,
+				range: [5, l1.text.length]
+			}, {
+				leaf: l6,
+				range: [0, 4]
+			}];
+			applyLeavesStyle(selections, newStyles);
+
+			let cl = n1.firstChild;
+			expect(cl.text).to.equal('Leaf ');
+			expect(cl.styles.bold).to.be.false;
+			expect(cl.new).to.be.true;
+			cl.new = false;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('1Leaf 2Leaf 3');
+			expect(cl.styles.bold).to.be.true;
+			expect(cl.new).to.be.true;
+			cl.new = false;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('Leaf 4');
+			expect(cl.styles.bold).to.be.true;
+			expect(cl.styles.italic).to.be.true;
+			expect(cl.new).to.be.true;
+			cl.new = false;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('Leaf 5Leaf');
+			expect(cl.styles.bold).to.be.true;
+			expect(cl.new).to.be.true;
+			cl.new = false;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal(' 6');
+			expect(cl.styles.bold).to.be.false;
+			expect(cl.new).to.be.true;
+			cl.new = false;
+			expect(cl.nextLeaf).to.equal(null);
+
+			done();
+		});
+
+		it('Undo', function(done) {
+			// Undo
+			readyTempHistorySteps();
+			undo();
+
+			let cl = n1.firstChild;
+			expect(cl).to.equal(l1);
+			cl = cl.nextLeaf;
+			expect(cl).to.equal(l2);
+			cl = cl.nextLeaf;
+			expect(cl).to.equal(l3);
+			cl = cl.nextLeaf;
+			expect(cl).to.equal(l4);
+			cl = cl.nextLeaf;
+			expect(cl).to.equal(l5);
+			cl = cl.nextLeaf;
+			expect(cl).to.equal(l6);
+			expect(cl.nextLeaf).to.equal(null);
+
+			done();
+		});
+
+		it('Redo', function(done) {
+			// Redo
+			readyTempHistorySteps();
+			redo();
+
+			let cl = n1.firstChild;
+			expect(cl.text).to.equal('Leaf ');
+			expect(cl.styles.bold).to.be.false;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('1Leaf 2Leaf 3');
+			expect(cl.styles.bold).to.be.true;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('Leaf 4');
+			expect(cl.styles.bold).to.be.true;
+			expect(cl.styles.italic).to.be.true;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('Leaf 5Leaf');
+			expect(cl.styles.bold).to.be.true;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal(' 6');
+			expect(cl.styles.bold).to.be.false;
+			expect(cl.nextLeaf).to.equal(null);
 
 			done();
 		});

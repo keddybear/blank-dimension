@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<style>
+		*, *:before, *:after {
+			box-sizing: border-box;
+		}
+		*:active, *:focus, *:visited {
+			outline: none;
+		}
+		body {
+			margin: 0;
+			padding: 0;
+		}
+		#blank-editor-container {
+			padding-top: 50px;
+		}
+		.noselect {
+			-webkit-touch-callout: none; /* iOS Safari */
+			-webkit-user-select: none; /* Safari */
+			-khtml-user-select: none; /* Konqueror HTML */
+			-moz-user-select: none; /* Firefox */
+			-ms-user-select: none; /* Internet Explorer/Edge */
+			user-select: none; /* Non-prefixed version, currently supported by Chrome and Opera */
+		}
+		.blank-editor {
+			outline: none;
+			white-space: pre-wrap;
+			overflow-wrap: break-word;
+			-webkit-user-modify: read-write-plaintext-only;
+		}
+		.blank-container {
+			font-size: 18px;
+			line-height: 1.6em;
+			font-family: Cambria, Georgia, serif;
+		}
+		.blank-container > div {
+			position: relative;
+			max-width: 700px;
+			margin-left: auto;
+			margin-right: auto;
+		}
+		.blank-container > div + div {
+			margin-top: 1em;
+		}
+		.blank-container .p {
+			text-indent: 2em;
+		}
+		.blank-container img {
+			width: 100%;
+			height: auto;
+			display: block;
+		}
+		[data-leaf-content] input {
+			cursor: pointer;
+			background: transparent;
+			border: none;
+			position: absolute;
+			width: 100%;
+			height: 100%;
+			top: 0;
+			left: 0;
+			transition: box-shadow 0.4s;
+		}
+		input.active {
+			box-shadow: 0 10px 40px -6px rgba(0, 0, 0, 0.8);
+		}
+	</style>
+</head>
+<body>
+	<div id='blank-editor-container'></div>
+</body>
+</html>

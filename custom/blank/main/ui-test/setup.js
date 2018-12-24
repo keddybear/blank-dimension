@@ -118,11 +118,11 @@ export const loadHTML = function(path) {
 					writable: true
 				},
 				anchorOffset: {
-					value: null,
+					value: 0,
 					writable: true
 				},
 				focusNode: {
-					value: 0,
+					value: null,
 					writable: true
 				},
 				focusOffset: {
@@ -133,15 +133,17 @@ export const loadHTML = function(path) {
 					value: function(startNode, startOffset) {
 						this.anchorNode = startNode;
 						this.anchorOffset = startOffset;
-						// Collapse to startNode if after endNode
-						if (this.focusNode !== null && this.anchorNode.compareDocumentPosition) {
-							const pos = this.anchorNode.compareDocumentPosition(this.focusNode);
-							if ((pos === 0 && this.anchorOffset > this.focusOffset) ||
-								isBitSet(pos, Node.DOCUMENT_POSITION_PRECEDING)) {
-								this.focusNode = this.anchorNode;
-								this.focusOffset = this.anchorOffset;
-							}
-						}
+						// // Collapse to startNode if after endNode
+						// if (this.anchorNode !== null &&
+						// 	this.focusNode !== null &&
+						// 	this.anchorNode.compareDocumentPosition) {
+						// 	const pos = this.anchorNode.compareDocumentPosition(this.focusNode);
+						// 	if ((pos === 0 && this.anchorOffset > this.focusOffset) ||
+						// 		isBitSet(pos, Node.DOCUMENT_POSITION_PRECEDING)) {
+						// 		this.focusNode = this.anchorNode;
+						// 		this.focusOffset = this.anchorOffset;
+						// 	}
+						// }
 					},
 					writable: false
 				},
@@ -149,15 +151,17 @@ export const loadHTML = function(path) {
 					value: function(endNode, endOffset) {
 						this.focusNode = endNode;
 						this.focusOffset = endOffset;
-						// Collapse to endNode if before startNode
-						if (this.anchorNode !== null && this.anchorNode.compareDocumentPosition) {
-							const pos = this.anchorNode.compareDocumentPosition(this.focusNode);
-							if ((pos === 0 && this.anchorOffset > this.focusOffset) ||
-								isBitSet(pos, Node.DOCUMENT_POSITION_PRECEDING)) {
-								this.anchorNode = this.focusNode;
-								this.anchorOffset = this.focusOffset;
-							}
-						}
+						// // Collapse to endNode if before startNode
+						// if (this.anchorNode !== null &&
+						// 	this.focusNode !== null &&
+						// 	this.anchorNode.compareDocumentPosition) {
+						// 	const pos = this.anchorNode.compareDocumentPosition(this.focusNode);
+						// 	if ((pos === 0 && this.anchorOffset > this.focusOffset) ||
+						// 		isBitSet(pos, Node.DOCUMENT_POSITION_PRECEDING)) {
+						// 		this.anchorNode = this.focusNode;
+						// 		this.anchorOffset = this.focusOffset;
+						// 	}
+						// }
 					},
 					writable: false
 				}
@@ -165,10 +169,10 @@ export const loadHTML = function(path) {
 			return range;
 		};
 		// Quick select
-		global.window.quickSelect = (anchorNode, anchorOffset, focusNode, focusOffset) => {
-			const range = global.window.createRange();
-			range.setStart(anchor, anchorOffset);
-			range.setEnd(focus, focusOffset);
+		global.window.quickSelect = (anchorNode, focusNode, anchorOffset, focusOffset) => {
+			const range = global.document.createRange();
+			range.setStart(anchorNode, anchorOffset);
+			range.setEnd(focusNode, focusOffset);
 
 			const sel = global.window.getSelection();
 			sel.removeAllRanges();
@@ -176,3 +180,96 @@ export const loadHTML = function(path) {
 		}
 	});
 };
+
+// Spy
+export class SpyMaster {
+	constructor() {
+		this.SpyCounter = new WeakMap();
+		this.SpyStorage = new WeakMap();
+	}
+
+	spy(obj, fname) {
+		if (typeof obj !== 'object') return;
+		if (obj === null) return;
+		if (obj[fname] === undefined) return;
+		if (typeof obj[fname] !== 'function') return;
+
+		const originalFn = obj[fname];
+		const counter = this.SpyCounter.get(obj) || {};
+		const storage = this.SpyStorage.get(obj) || {};
+
+		// Prepare counter for function fname
+		if (counter[fname] !== undefined) return; // Already spying
+		this.SpyCounter.set(obj, { ...counter, [fname]: 0 });
+
+		// Store original function for obj
+		this.SpyStorage.set(obj, {...storage, [fname]: originalFn });
+
+		// Wrap originalFn with a counter
+		const sc = this.SpyCounter;
+		obj[fname] = function() {
+			const c = sc.get(obj);
+			c[fname] += 1;
+			return originalFn.apply(obj, arguments);
+		};
+	}
+
+	unspy(obj, fname) {
+		if (typeof obj !== 'object') return;
+		if (obj === null) return;
+		if (obj[fname] === undefined) return;
+		if (typeof obj[fname] !== 'function') return;
+
+		const counter = this.SpyCounter.get(obj);
+		const storage = this.SpyStorage.get(obj);
+		if (!counter || !storage) return;
+
+		// Remove counter for fname
+		if (counter[fname] !== undefined) {
+			if (Object.keys(counter).length === 1) {
+				this.SpyCounter.delete(obj);
+			} else {
+				delete counter[fname];
+			}
+		}
+
+		// Restore fname original function from storage
+		if (storage[fname] !== undefined) {
+			const originalFn = storage[fname];
+			if (Object.keys(storage).length === 1) {
+				this.SpyStorage.delete(obj);
+			} {
+				delete storage[fname];
+			}
+			obj[fname] = originalFn;
+		}
+	}
+	
+	// Get call count
+	get(obj, fname) {
+		if (typeof obj !== 'object') return null;
+		if (obj === null) return null;
+		if (obj[fname] === undefined) return null;
+		if (typeof obj[fname] !== 'function') return null;
+
+		const counter = this.SpyCounter.get(obj);
+		if (counter && counter[fname] !== undefined) {
+			return counter[fname];
+		}
+
+		return null;
+	}
+
+	// Reset call count
+	reset(obj, fname) {
+		if (typeof obj !== 'object') return null;
+		if (obj === null) return null;
+		if (obj[fname] === undefined) return null;
+		if (typeof obj[fname] !== 'function') return null;
+
+		const counter = this.SpyCounter.get(obj);
+		if (counter && counter[fname] !== undefined) {
+			counter[fname] = 0;
+		}
+	}
+}

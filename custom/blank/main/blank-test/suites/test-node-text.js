@@ -41,8 +41,7 @@ import {
 	_BACKSPACE_,
 	applyBranchText
 } from '../../integration';
-
-const { expect } = require('chai');
+import { expect } from 'chai';
 
 /*
 	getPrevLeafChain

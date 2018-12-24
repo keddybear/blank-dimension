@@ -2,7 +2,10 @@
 
 // Node type enum
 export const NodeTypes = {
-	PARAGRAPH: 0
+	PARAGRAPH: 0,
+	ORDERED_LIST: 1,
+	UNORDERED_LIST: 2,
+	LIST_ITEM: 3
 };
 
 let BlankCounterExists = false;
@@ -465,7 +468,7 @@ export class RootNode {
 	*/
 	firstChild: Node | null;
 	new: boolean;
-	container: HTMLElement | null; // TODO (Should not be null)
+	container: HTMLElement | null;
 	RootNode: boolean;
 	renderPos: number | null;
 	dirty: number;
@@ -478,9 +481,8 @@ export class RootNode {
 		// RootNode is always old
 		this.new = false;
 
-		// Temporary (TODO)
-		this.container = (typeof window !== 'undefined' && window.document) ?
-			window.document.getElementById(`${BLANK_EDITOR_ID}`) : null;
+		// DocumentRoot's corresponding HTMLElement is assigned in RootComponent
+		this.container = null;
 
 		// Identity check
 		this.RootNode = true;
