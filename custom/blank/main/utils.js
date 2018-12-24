@@ -53,6 +53,7 @@ export const BlankFlags = {
 */
 export function instanceOf(v: mixed, k: string): boolean {
 	if (typeof v !== 'object') return false;
+	if (v === null) return false; // null is an object
 	return v[k] !== undefined;
 }
 

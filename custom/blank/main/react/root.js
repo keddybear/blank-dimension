@@ -22,27 +22,36 @@ class RootComponent extends React.Component<RootProps, RootState> {
 		@ attributes
 		root: RootNode
 		chainRef: { current: null | ChainComponent }
+		containerRef: { current: null | React.ElementRef<*> }
 		props: RootProps
 		state: RootState
 	*/
 
 	node: RootNode; // eslint-disable-line
 	chainRef: { current: null | ChainComponent };
+	containerRef: { current: null | React.ElementRef<*> };
 
 	constructor(props: RootProps) {
 		super(props);
 		this.node = DocumentRoot;
 		this.chainRef = { current: null };
+		this.containerRef = React.createRef();
 	}
 
 	componentDidMount(): void {
 		// Only update ReactMap
 		ReactMap.set(this.node, this);
+		// Assign DocumentRoot.container
+		DocumentRoot.container = this.containerRef.current;
 	}
 
 	shouldComponentUpdate(): boolean {
 		// RootComponent will not render itself.
 		return false;
+	}
+
+	componentDidCatch(error: any) { // eslint-disable-line
+		console.log(error);
 	}
 
 	componentWillUnmount(): void {
@@ -53,7 +62,7 @@ class RootComponent extends React.Component<RootProps, RootState> {
 	render() {
 		let chain = null;
 		if (this.node.firstChild) {
-			chain = <ChainComponent firstChild={this.node.firstChild} chainRef={this.chainRef} />;
+			chain = <ChainComponent parent={this.node} chainRef={this.chainRef} />;
 		}
 		return (
 			<div
@@ -63,8 +72,9 @@ class RootComponent extends React.Component<RootProps, RootState> {
 				spellCheck='true'
 				autoCorrect='on'
 				data-gramma='false'
+				suppressContentEditableWarning
 			>
-				<div className='blank-container'>
+				<div className='blank-container' ref={this.containerRef}>
 					{ chain }
 				</div>
 			</div>

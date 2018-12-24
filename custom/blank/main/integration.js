@@ -349,7 +349,10 @@ export function setFirstChild(parent: Node | null, child: Node | Leaf): void {
 		}
 		// $FlowFixMe
 		DocumentRoot.firstChild = child;
-	} else {
+	} else { // $FlowFixMe
+		if (instanceOf(child.firstChild, 'Leaf') && !isTextLeaf(child.firstChild)) {
+			throw new Error('Non-text Leaves must not have more than one Node.');
+		}
 		p.firstChild = child;
 	}
 }
@@ -701,9 +704,15 @@ export function setParentLink(child: Leaf | Node, node: Node | null): void {
 		}
 		if (node === null) {
 			throw new Error('If parent is null in setParentLink(), child must not be a Leaf.');
+		} // $FlowFixMe
+		if (!isTextLeaf(child) && node.parent !== null) {
+			throw new Error('Non-text Leaves must not have more than one Node.');
 		}
 	} else if (child.prevNode !== null) {
 		throw new Error('The child Node in setParentLink() must be the first Node of a NodeChain.');
+		// $FlowFixMe
+	} else if (node !== null && instanceOf(child.firstChild, 'Leaf') && !isTextLeaf(child.firstChild)) {
+		throw new Error('Non-text Leaves must not have more than one Node.');
 	}
 
 	let c = child;
@@ -733,8 +742,15 @@ export function setParentNode(start: Leaf | Node, parent: Node | null): void {
 
 	const leaf = instanceOf(start, 'Leaf');
 
-	if (leaf && parent === null) {
-		throw new Error('If parent is null in setParentNode(), child must not be a Leaf.');
+	if (leaf) {
+		if (parent === null) {
+			throw new Error('If parent is null in setParentNode(), child must not be a Leaf.');
+		} // $FlowFixMe
+		if (!isTextLeaf(start) && parent.parent !== null) {
+			throw new Error('Non-text Leaves must not have more than one Node.');
+		} // $FlowFixMe
+	} else if (parent !== null && instanceOf(start.firstChild, 'Leaf') && !isTextLeaf(start.firstChild)) {
+		throw new Error('Non-text Leaves must not have more than one Node.');
 	}
 
 	let c = start;
@@ -1689,6 +1705,11 @@ export function chainLeaf(newLeaf: Leaf, targetLeaf: Leaf): void {
 		throw new Error('If new, targetLeaf\'s nextLeaf must not be replaced if not null.');
 	}
 
+	// No chaining allowed for non-text Leaves
+	if (!isTextLeaf(n) || !isTextLeaf(t)) {
+		throw new Error('Chaining is not allowed for non-text Leaves.');
+	}
+
 	// If already chained after, do nothing
 	if (chainedLeaf(n, t) === _CHAINED_AFTER_) return;
 
@@ -1877,7 +1898,7 @@ export function rechainLeaf(leaf: any, fromPast: boolean): void {
 		if (rechainPrev && rechainNext) {
 			// Need to rechain both ends
 			// Check if prevLeaf and nextLeaf are chained
-			if (chainedLeaf(prevLeaf, nextLeaf) !== 0) {
+			if (chainedLeaf(prevLeaf, nextLeaf) !== _NOT_CHAINED_) {
 				// prevLeaf and nextLeaf are chained
 				// Create a NullLeaf for unchain()
 				const nl = new NullLeaf({ prevLeaf, nextLeaf });
@@ -1946,7 +1967,7 @@ export function rechainLeaf(leaf: any, fromPast: boolean): void {
 		if (rechainPrev && rechainNext) {
 			// Need to rechain both ends
 			// Check if prevLeaf and nextLeaf are chained
-			if (chainedLeaf(prevLeaf, nextLeaf) !== 0) {
+			if (chainedLeaf(prevLeaf, nextLeaf) !== _NOT_CHAINED_) {
 				// prevLeaf and nextLeaf are chained
 				// Create a NullLeaf for unchain()
 				const nl = new NullLeaf({ prevLeaf, nextLeaf });
@@ -2022,7 +2043,7 @@ export function rechainLeaf(leaf: any, fromPast: boolean): void {
 			// Check if prevLeaf and nextLeaf are chained
 			// If chained do nothing
 			// If not chained, create a LeafChain for unchain()
-			if (chainedLeaf(prevLeaf, nextLeaf) === 0) {
+			if (chainedLeaf(prevLeaf, nextLeaf) === _NOT_CHAINED_) {
 				const lc = new LeafChain({
 					startLeaf: prevLeaf.nextLeaf,
 					endLeaf: nextLeaf.prevLeaf
@@ -2085,6 +2106,12 @@ export function rechainLeaf(leaf: any, fromPast: boolean): void {
 		  concat removed Leaf's text before or after the current text respectivelly,
 		- Consume zero-widths in text. If final Leaf is empty, make it zero-width.
 		- Push the removed Leaf to history past stack, only if it's old.
+			- When consuming a mix of new and old Nodes, the last unchained old Node needs to
+			  keep track of the correct prevLeaf and nextLeaf. Otherwise, rechaining only old
+			  Nodes, without rechaining consumed new Nodes, will produce error.
+			  	- LastConsumed
+			  	- Its value must be reset to null in autoMergeLeaf() after the current consumer
+			  	  Node finishes consuming in one direction.
 		- Only new Leaf can consume other Leaves.
 		- Only consume when two Leaves have the same styles, or at least one Leaf is zero-width.
 		- consume() will mark a consumed dirty Leaf so that autoMergeLeaf won't be called on
@@ -2104,6 +2131,7 @@ export function rechainLeaf(leaf: any, fromPast: boolean): void {
 			- true: successfully consumed
 			- false: unable to consume
 */
+let LastConsumed = null;
 export const _TRAVERSE_UP_ = true; // eslint-disable-line
 export const _TRAVERSE_DOWN_ = false; // eslint-disable-line
 export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
@@ -2151,11 +2179,18 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 			}
 			// If old, push prevLeaf to history past stack;
 			if (prevLeaf.new === false) {
+				LastConsumed = prevLeaf;
 				unchainLeaf(prevLeaf, _PAST_STACK_);
-			} else if (prevLeaf.consumed !== null) {
+			} else {
+				// If not old, change LastConsumed's prevLeaf to its prevLeaf
+				if (LastConsumed) {
+					LastConsumed.prevLeaf = prevPrevLeaf;
+				}
 				// If not old, check if consumed attribute exists
-				// It it does, mark consumed Leaf
-				prevLeaf.consumed = true;
+				if (prevLeaf.consumed !== null) {
+					// It it does, mark consumed Leaf
+					prevLeaf.consumed = true;
+				}
 			}
 			// PAS
 			if (PostActionSelection.start) {
@@ -2211,11 +2246,18 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 			}
 			// If old, push nextLeaf to history past stack;
 			if (nextLeaf.new === false) {
+				LastConsumed = nextLeaf;
 				unchainLeaf(nextLeaf, _PAST_STACK_);
-			} else if (nextLeaf.consumed !== null) {
+			} else {
+				// If not old, change LastConsumed's nextLeaf to its nextLeaf
+				if (LastConsumed) {
+					LastConsumed.nextLeaf = nextNextLeaf;
+				}
 				// If not old, check if consumed attribute exists
-				// It it does, mark consumed Leaf
-				nextLeaf.consumed = true;
+				if (nextLeaf.consumed !== null) {
+					// It it does, mark consumed Leaf
+					nextLeaf.consumed = true;
+				}
 			}
 			// PAS
 			if (PostActionSelection.start) {
@@ -2251,10 +2293,13 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 
 /*
 	copyLeaf:
-		- Copy every attribute of a Leaf, except for its chaining and class info, into a
-		  new Leaf, and return the new Leaf.
-		- The range of text to be copied can be specified. By default, it will copy the
-		  entire text.
+		- Copy a text Leaf:
+			- Copy every attribute of a Leaf, except for its chaining and class info, into a
+			  new Leaf, and return the new Leaf.
+			- The range of text to be copied can be specified. By default, it will copy the
+			  entire text.
+		- Copy a non-text Leaf:
+			- Copy type, then copy custom attributes.
 	@ params
 		leaf: Leaf object
 		range: Array<number> | null - default: null
@@ -2263,11 +2308,18 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 */
 export function copyLeaf(leaf: Leaf, range: Array<number> | null = null): Leaf {
 	const copy = new Leaf();
-	copyLeafStyles(copy, leaf);
-	if (range === null || range.length !== 2) {
-		copy.text = leaf.text;
-	} else if (range[0] !== range[1]) {
-		copy.text = leaf.text.substring(range[0], range[1]);
+	if (isTextLeaf(leaf)) {
+		copyLeafStyles(copy, leaf);
+		if (range === null || range.length !== 2) {
+			copy.text = leaf.text;
+		} else if (range[0] !== range[1]) {
+			copy.text = leaf.text.substring(range[0], range[1]);
+		}
+	} else {
+		copy.type = leaf.type;
+		if (typeof leaf.custom === 'object') {
+			copy.custom = { ...leaf.custom };
+		}
 	}
 	return copy;
 }
@@ -2356,33 +2408,40 @@ export function copyNode(node: Node): Node {
 	copyNodeChain:
 		- Copy the subtree specified by its startLeaf and endLeaf, whose range can be
 		  specified.
-		- startLeaf and endLeaf must not be null, and they must not have the same
-		  parent.
+		- startLeaf and endLeaf must not be null.
+			- startLeaf and endLeaf can have the same parent.
 		- Return an object that contains the startNode and endNode of the copied
 		  NodeChain, and the first Leaf of the first LeafChain, and the last Leaf of
 		  the last LeafChain.
+		- If instructed to stop at the first non-text Leaf, it will stop either at the
+		  endLeaf or the first non-text Leaf, whichever comes first.
+		  	- If it stops at a non-text Leaf, it will include the Leaf in its return
+		  	  object as stopLeaf.
+		  	- NOTE: If startLeaf is non-text, it won't stop.
 	@ params
 		startLeaf: Leaf object
 		endLeaf: Leaf object
 		startRange: Array<number> | null - default: null
 		endRange: Array<number> | null - default: null
+		stopAtNonText: boolean - default: false
 	@ return
 		copy: Object
 			- startNode: Node object
 			- endNode: Node object
 			- firstLeaf: Leaf object
 			- lastLeaf: Leaf object
+			- stopLeaf: Leaf object | null
 */
+export const _STOP_AT_NON_TEXT_ = true; // eslint-disable-line
 export function copyNodeChain(
 	startLeaf: Leaf,
 	endLeaf: Leaf,
 	startRange: Array<number> | null = null,
-	endRange: Array<number> | null = null
+	endRange: Array<number> | null = null,
+	stopAtNonText: boolean = false
 ): Object {
 	if (startLeaf === null || endLeaf === null) {
 		throw new Error('startLeaf and endLeaf must not be null in copyNodeChain().');
-	} else if (startLeaf.parent === endLeaf.parent) {
-		throw new Error('startLeaf and endLeaf must not have the same parent.');
 	}
 
 	const startNode = startLeaf.parent;
@@ -2395,6 +2454,8 @@ export function copyNodeChain(
 	let currentNode = null;
 	// currentCopy stores the copied Node in the current iteration
 	let currentCopy = null;
+	// prevCurrentCopy is used to check if currentCopy is a new copy
+	let prevCurrentCopy = null;
 	// currentCopyNode is used to navigate the copied tree
 	let currentCopyNode = null;
 	// rootCopy copies the root parent of startLeaf
@@ -2410,11 +2471,14 @@ export function copyNodeChain(
 	// prevParentCopy is the copy of a Node whose first child is a Node that has
 	// not been copied yet
 	let prevParentCopy = null;
+	// The first non-text Leaf is stopAtNonText is true
+	let stopLeaf = null;
 	// exit signal
 	let exit = false;
 	while (!exit) {
 		// Only copy currentNode if it has not been copied
 		if (currentCopyNode === null) {
+			prevCurrentCopy = currentCopy;
 			// Before reaching startNode, copy branch Nodes
 			if (firstLeaf === null) {
 				currentNode = bt.branch[depth].ref;
@@ -2427,30 +2491,52 @@ export function copyNodeChain(
 				currentCopy = copyNode(currentNode);
 				setParentLink(leafChainCopy.startLeaf, currentCopy);
 				firstLeaf = leafChainCopy.startLeaf;
-			} else if (currentNode === endNode) {
-				// $FlowFixMe
-				const leafChainCopy = copyLeafChain(endNode.firstChild, endLeaf, null, endRange);
-				// $FlowFixMe
-				currentCopy = copyNode(currentNode);
-				setParentLink(leafChainCopy.startLeaf, currentCopy);
+				// Save lastLeaf in case the copy is stopped by a non-text Leaf
 				lastLeaf = leafChainCopy.endLeaf;
-				exit = true; // $FlowFixMe
-			} else if (instanceOf(currentNode.firstChild, 'Leaf')) { // $FlowFixMe
-				const leafChainCopy = copyLeafChain(currentNode.firstChild, null, null, null);
-				// $FlowFixMe
-				currentCopy = copyNode(currentNode);
-				setParentLink(leafChainCopy.startLeaf, currentCopy);
+				// Exit if startNode is the same as endNode
+				if (startNode === endNode) {
+					exit = true;
+				}
+			} else if (currentNode === endNode) {
+				// Stop at non-text if stopAtNonText is true // $FlowFixMe
+				if (stopAtNonText && !isTextLeaf(endNode.firstChild)) {
+					stopLeaf = endNode.firstChild;
+					exit = true;
+				} else {
+					// $FlowFixMe
+					const leafChainCopy = copyLeafChain(endNode.firstChild, endLeaf, null, endRange);
+					// $FlowFixMe
+					currentCopy = copyNode(currentNode);
+					setParentLink(leafChainCopy.startLeaf, currentCopy);
+					lastLeaf = leafChainCopy.endLeaf;
+					exit = true;
+				} // $FlowFixMe
+			} else if (instanceOf(currentNode.firstChild, 'Leaf')) {
+				// Stop at non-text if stopAtNonText is true // $FlowFixMe
+				if (stopAtNonText && !isTextLeaf(currentNode.firstChild)) {
+					stopLeaf = currentNode.firstChild;
+					exit = true;
+				} else { // $FlowFixMe
+					const leafChainCopy = copyLeafChain(currentNode.firstChild, null, null, null);
+					// $FlowFixMe
+					currentCopy = copyNode(currentNode);
+					setParentLink(leafChainCopy.startLeaf, currentCopy);
+					lastLeaf = leafChainCopy.endLeaf;
+				}
 			} else {
 				// currentNode's firstChild is a Node // $FlowFixMe
 				currentCopy = copyNode(currentNode);
 			}
-			// Chain or set parent link
-			if (prevCopy !== null) {
-				// Chain the copied Node
-				chainNode(currentCopy, prevCopy);
-			} else if (prevParentCopy !== null) {
-				// Set parent if prevCopy is null and prevParentCopy is not
-				setParentLink(currentCopy, prevParentCopy);
+			// Only chain currentCopy if currentCopy is a new copy
+			if (currentCopy !== prevCurrentCopy) {
+				// Chain or set parent link
+				if (prevCopy !== null) {
+					// Chain the copied Node // $FlowFixMe
+					chainNode(currentCopy, prevCopy);
+				} else if (prevParentCopy !== null) {
+					// Set parent if prevCopy is null and prevParentCopy is not // $FlowFixMe
+					setParentLink(currentCopy, prevParentCopy);
+				}
 			}
 			// Update currentCopyNode
 			currentCopyNode = currentCopy;
@@ -2459,35 +2545,62 @@ export function copyNodeChain(
 		if (rootCopy === null && currentNode.parent === null) {
 			rootCopy = currentCopy;
 		}
-		// Get next Node // $FlowFixMe
-		if (instanceOf(currentNode.firstChild, 'Node') && currentCopyNode.firstChild === null) {
-			currentNode = currentNode.firstChild;
-			// Update prevParentCopy
-			prevParentCopy = currentCopyNode;
-			currentCopyNode = null; // = currentCopyNode = currentCopyNode.firstChild
-			prevCopy = null; // $FlowFixMe
-		} else if (currentNode.nextNode !== null) {
-			prevCopy = currentCopyNode;
-			currentNode = currentNode.nextNode;
-			currentCopyNode = currentCopyNode.nextNode;
-		} else { // $FlowFixMe
-			currentNode = currentNode.parent;
-			currentCopyNode = currentCopyNode.parent;
-		}
 		// Find lastCopy if currentNode is null or exit is true
 		// When currentNode is null, exit should be true
 		if (currentNode === null || exit) {
 			if (!exit) throw new Error('copyNodeChain() exits before copying the endLeaf.');
 			lastCopy = currentCopy;
+			// If stopLeaf exists, we need to discard the last copied branch if it has
+			// no Leaf // $FlowFixMe
+			let discarded = lastCopy.firstChild !== null;
 			// $FlowFixMe
 			while (lastCopy.parent !== null) {
+				if (stopLeaf !== null && !discarded) { // $FlowFixMe
+					if (lastCopy.prevNode !== null) {
+						lastCopy = lastCopy.prevNode;
+						// Discard
+						lastCopy.nextNode = null;
+						discarded = true;
+					}
+				}
 				lastCopy = lastCopy.parent;
+			}
+			// If still not discarded
+			if (stopLeaf !== null && !discarded) {
+				// $FlowFixMe
+				if (lastCopy.prevNode === null) {
+					throw new Error('copyNodeChain() has copied a Branch with no Leaf.');
+				}
+				// Discard
+				lastCopy = lastCopy.prevNode;
+				lastCopy.nextNode = null;
 			}
 			// Exit
 			break;
 		}
+		// If no break, get the next Node to copy // $FlowFixMe
+		if (instanceOf(currentNode.firstChild, 'Node') && currentCopyNode.firstChild === null) {
+			currentNode = currentNode.firstChild;
+			// Update prevParentCopy
+			prevParentCopy = currentCopyNode;
+			currentCopyNode = null; // currentCopyNode = currentCopyNode.firstChild
+			prevCopy = null; // $FlowFixMe
+		} else if (currentNode.nextNode !== null) {
+			prevCopy = currentCopyNode;
+			currentNode = currentNode.nextNode; // $FlowFixMe
+			currentCopyNode = currentCopyNode.nextNode;
+		} else { // $FlowFixMe
+			currentNode = currentNode.parent; // $FlowFixMe
+			currentCopyNode = currentCopyNode.parent;
+		}
 	}
-	return { startNode: rootCopy, endNode: lastCopy, firstLeaf, lastLeaf };
+	return {
+		startNode: rootCopy,
+		endNode: lastCopy,
+		firstLeaf,
+		lastLeaf,
+		stopLeaf
+	};
 }
 
 //= Leaf Action Helpers
@@ -2524,7 +2637,9 @@ export function autoMergeLeaf(leaf: Leaf): void {
 		throw new Error('autoMergeLeaf must be called on a new Leaf.');
 	}
 	while (consume(leaf, _TRAVERSE_UP_));
+	LastConsumed = null;
 	while (consume(leaf, _TRAVERSE_DOWN_));
+	LastConsumed = null;
 }
 
 /*
@@ -2662,10 +2777,13 @@ export function mergeLeafTexts(leafText: LeafText, targetLeafText: LeafText): bo
 export function applyBranchType(selections: Array<SelectionObject>, type: Array<number>): void {
 	if (selections.length !== 2) return;
 
-	const { leaf: firstLC } = selections[0];
-	const { leaf: lastLC } = selections[1];
+	const { leaf: firstL } = selections[0];
+	const { leaf: lastL } = selections[1];
+	// Get the first Leaf for the LeafChain selected by firstL and lastL // $FlowFixMe
+	const firstLC = firstL.parent.firstChild; // $FlowFixMe
+	const lastLC = lastL.parent.firstChild;
 	let currentLC = firstLC;
-	const targetBT = getBranchTypeFromArray(type);
+	const targetBT = getBranchTypeFromArray(type); // $FlowFixMe
 	const currentBT = getBranchType(currentLC);
 	let index = compareBranchType(currentBT, targetBT);
 	// Step 1
@@ -2697,7 +2815,7 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 	// If growing on the "middle", middleEnd is the endNode of the "middle" chain, and
 	// the middleNext is what it will be chained to.
 	let middleEnd = middle; // $FlowFixMe
-	let middleNext = EntryPoint.nextNode;
+	let middleNext = null;
 	if (currentLC !== lastLC) { // $FlowFixMe
 		nextLC = getNextLeafChain(currentLC); // No need for findNextLeafChain()
 		// Remeber current parent // $FlowFixMe
@@ -2819,13 +2937,17 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 				} else {
 					middleNext = null;
 				}
+			} else {
+				// If not growing on the "middle", middleNext is EntryPoint's current
+				// nextNode // $FlowFixMe
+				middleNext = EntryPoint.nextNode;
 			}
 			// Done
 			break;
 		}
 	}
 	// Step 10 // $FlowFixMe
-	if (EntryPoint.prevNode === null && middleNext === null) {
+	if (before === null && EntryPoint.prevNode === null && middleNext === null) {
 		// EntryPoint is the only Node -> unchain a ParentLink // $FlowFixMe
 		const p = EntryPoint.parent || DocumentRoot; // $FlowFixMe
 		const pl = new ParentLink(EntryPoint, EntryPoint.parent);
@@ -3063,12 +3185,17 @@ export function applyLeafText(leaf: Leaf, range: Array<number>, replacement: str
 	let merged = false;
 	if (len > 0) {
 		const e = TempHistoryPastStep.stack[len - 1];
-		if (instanceOf(e, 'LeafText')) {
+		if (instanceOf(e, 'LeafText')) { // $FlowFixMe
 			merged = mergeLeafTexts(lt, e);
 		}
 	}
 
-	if (!merged) unchainLeaf(lt, _PAST_STACK_);
+	if (!merged) {
+		unchainLeaf(lt, _PAST_STACK_);
+	} else if (!BlankFlags.DISABLE_RENDER) {
+		// Mark dirty for rendering
+		markBlankElementDirty(lt);
+	}
 
 	// PAS
 	setPAS({
@@ -3091,6 +3218,7 @@ export function applyLeafText(leaf: Leaf, range: Array<number>, replacement: str
 			- appendBefore is dirty.
 		5. Create a new LeafChain by copying endLeaf and Leaves after it, as appendAfter.
 			- appendAfter is dirty.
+			- If endLeaf is non-text, do not use appendAfter.
 		6. If startLeaf and endLeaf have different parents, remove every LeafChain's parent
 		   after startLeaf, including endLeaf's parent.
 		7. Replace startLeaf with appendBefore.
@@ -3152,10 +3280,13 @@ export function appendAndGrow(
 	DirtyNewLeaves.push(appendBefore);
 
 	// Step 5
-	const { startLeaf: appendAfter } =
-		copyLeafChain(endLeaf, null, [endRange[1], endLeaf.text.length], null);
-	appendAfter.consumed = false;
-	DirtyNewLeaves.push(appendAfter);
+	let appendAfter = null;
+	if (isTextLeaf(endLeaf)) {
+		const endCopy = copyLeafChain(endLeaf, null, [endRange[1], endLeaf.text.length], null);
+		appendAfter = endCopy.startLeaf;
+		appendAfter.consumed = false;
+		DirtyNewLeaves.push(appendAfter);
+	}
 
 	// Step 6
 	if (startLeaf.parent !== endLeaf.parent) {
@@ -3182,7 +3313,7 @@ export function appendAndGrow(
 	// Step 8 & 9
 	let AppendPoint = null;
 	let nextLeafForNode = null; // the starting LeafChain to iterate through a NodeChain
-	if (type === IS_STRING) {
+	if (type === IS_STRING) { // $FlowFixMe
 		const first = new Leaf({ text: texts[0] });
 		setLeafStyles(first, CaretStyle);
 		chainLeaf(first, appendBefore);
@@ -3234,6 +3365,9 @@ export function appendAndGrow(
 		let nextL = nextLeafForNode; // AppendPoint is the first Leaf in the NodeChain
 		let currentN = null;
 		while (nextL !== null) {
+			if (!isTextLeaf(nextL)) {
+				throw new Error('appendAndGrow() does not handle non-text Leaves in replacement.');
+			}
 			currentL = nextL;
 			nextL = getNextLeafChain(currentL);
 			// Detach currentL (no need to unchain)
@@ -3260,7 +3394,7 @@ export function appendAndGrow(
 	}
 
 	// Step 11 // $FlowFixMe
-	chainLeaf(appendAfter, AppendPoint);
+	if (appendAfter !== null) chainLeaf(appendAfter, AppendPoint);
 
 	// Step 12
 	if (middleStart !== null) { // $FlowFixMe
@@ -3280,8 +3414,11 @@ export function appendAndGrow(
 		1. Get startLeaf, startRange, endLeaf, endRange from selections.
 		2. Create a new Leaf from startLeaf and startRange, as appendBefore.
 			- appendBefore is dirty.
+			- appendBefore is null, if startLeaf is non-text. startLeaf's parent should be
+			  removed.
 		3. Create a new LeafChain by copying endLeaf and Leaves after it, as appendAfter.
 			- appendAfter is dirty.
+			- appendAfter is null, if endLeaf is non-text. endLeaf's parent should be removed.
 		4. Get the root parent of startLeaf and its prevNode, as startRoot and startRootPrev.
 		5. If startLeaf and endLeaf have the same parent:
 			- If appendBefore and appendAfter are both single zeroLeaves, and if startLeaf is
@@ -3324,18 +3461,24 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 	const { leaf: endLeaf, range: endRange } = selections[1];
 
 	// Step 2
-	const appendBefore = new Leaf({
-		text: startLeaf.text.substring(0, startRange[0])
-	});
-	copyLeafStyles(appendBefore, startLeaf);
-	appendBefore.consumed = false;
-	DirtyNewLeaves.push(appendBefore);
+	let appendBefore = null;
+	if (isTextLeaf(startLeaf)) {
+		appendBefore = new Leaf({
+			text: startLeaf.text.substring(0, startRange[0])
+		});
+		copyLeafStyles(appendBefore, startLeaf);
+		appendBefore.consumed = false;
+		DirtyNewLeaves.push(appendBefore);
+	}
 
 	// Step 3
-	const { startLeaf: appendAfter } =
-		copyLeafChain(endLeaf, null, [endRange[1], endLeaf.text.length], null);
-	appendAfter.consumed = false;
-	DirtyNewLeaves.push(appendAfter);
+	let appendAfter = null;
+	if (isTextLeaf(endLeaf)) {
+		const endCopy =	copyLeafChain(endLeaf, null, [endRange[1], endLeaf.text.length], null);
+		appendAfter = endCopy.startLeaf;
+		appendAfter.consumed = false;
+		DirtyNewLeaves.push(appendAfter);
+	}
 
 	// Step 4
 	let startRoot = startLeaf.parent; // $FlowFixMe
@@ -3350,8 +3493,11 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 		// startLeaf and endLeaf have the same parent
 		const p = startLeaf.parent;
 		const nextLeaf = getNextLeafChain(startLeaf);
-		if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null &&
-			isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) { // $FlowFixMe
+		if (appendBefore === null || appendAfter === null) {
+			removeNode(p);
+			ShatterPoint = nextLeaf;
+		} else if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null &&
+			isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) {
 			removeNode(p);
 			ShatterPoint = nextLeaf;
 		} else if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null) {
@@ -3408,7 +3554,9 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 			currentLC = getNextLeafChain(currentLC);
 		}
 		// appendBefore
-		if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null) { // $FlowFixMe
+		if (appendBefore === null) {
+			removeNode(startLeaf.parent);
+		} else if (isZeroLeaf(appendBefore) && startLeaf.prevLeaf === null) {
 			removeNode(startLeaf.parent);
 		} else {
 			const prevStart = startLeaf.prevLeaf;
@@ -3424,8 +3572,13 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 			}
 		}
 		// appendAfter
-		if (isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) {
-			const nextLeaf = getNextLeafChain(endLeaf); // $FlowFixMe
+		if (appendAfter === null) {
+			const nextLeaf = getNextLeafChain(endLeaf);
+			removeNode(endLeaf.parent);
+			// Set ShatterPoint
+			ShatterPoint = nextLeaf;
+		} else if (isZeroLeaf(appendAfter) && appendAfter.nextLeaf === null) {
+			const nextLeaf = getNextLeafChain(endLeaf);
 			removeNode(endLeaf.parent);
 			// Set ShatterPoint
 			ShatterPoint = nextLeaf;
@@ -3503,10 +3656,10 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 	if (ll) {
 		setPAS({
 			leaf: ll,
-			range: isZeroLeaf(ll) ? [0, 0] : [ll.text.length, ll.text.length]
+			range: !isTextLeaf(ll) || isZeroLeaf(ll) ? [0, 0] : [ll.text.length, ll.text.length]
 		}, {
 			leaf: ll,
-			range: isZeroLeaf(ll) ? [0, 0] : [ll.text.length, ll.text.length]
+			range: !isTextLeaf(ll) || isZeroLeaf(ll) ? [0, 0] : [ll.text.length, ll.text.length]
 		});
 	}
 
@@ -3522,6 +3675,10 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 		3. Create a new LeafChain by copying endLeaf and Leaves after it, as appendAfter.
 			- appendAfter is dirty.
 		4. If startLeaf and endLeaf are the same Leaf:
+			- If Leaf is non-text, and Flag is "Newline", grow a default Node with a zeroLeaf.
+			  PAS is in the zeroLeaf.
+			  	- If Flag is not "Newline", replace the Leaf with a default Node with a
+			  	  zeroLeaf. PAS is in the zeroLeaf.
 			- If Leaf is empty and Flag is "Newline", grow an empty Node.
 				- Same as "Leaf is empty" functionally, but I don't want to unchain a ParentLink
 				  for zeroLeaf.
@@ -3532,17 +3689,21 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 				  the last character in the prevLeaf, if it exists. Else it copies the current
 				  LeafChain, if not empty, removes its parent, and chain the copy after the end
 				  of the previous LeafChain, found by getPrevLeafChain(). If previous LeafChain
-				  is null, do nothing.
+				  is null, do nothing. If previous LeafChain is non-text, delete previous
+				  LeafChain's parent. PAS stays the same as selection.
 				  	- Use applyLeafText() for deleting a single character.
 				- "Delete" delets the next character, if it exists. Else it deletes the first
 				  character in the nextLeaf, if it exists. Else it removes the current Leaf's
 				  parent, if the Leaf is empty and the only Leaf of the parent. Else it copies
 				  the next LeafChain, if not empty, removes its parent, and chain the copy after
-				  startLeaf. If next LeafChain is null, do nothing.
+				  startLeaf. If next LeafChain is null, do nothing. If next LeafChain is
+				  non-text, delete next LeafChain's parent. PAS stays the same as selection.
 				  	- Use applyLeafText() for deleting a single character.
 			- If selection is not zero-width and Flag is not "Newline", delegate function to
 			  applyLeafText().
 		5. If startLeaf and endLeaf have the same parent:
+			- If startLeaf is non-text, startLeaf must be the same as endLeaf. If not, throw
+			  error.
 			- If Flag is either "Delete" or "Backspace", replace startLeaf with appendBefore and
 			  chain appendAfter after appendBefore.
 			- If Flag is "Newline", replace startLeaf with appendBefore. Grow a new Node with
@@ -3552,6 +3713,11 @@ export function shatterAndInsert(selections: Array<SelectionObject>, replacement
 			- If Flag is "Newline", grow a new Node after startLeaf's parent with appendAfter.
 			  Then replace startLeaf with appendBefore.
 				- If not, chain appendAfter after appendBefore and replace startLeaf with it.
+			- If startLeaf is non-text, replace its root Node with a raw Node. If Flag is
+			  "Newline", grow another raw Node with zeroLeaf or appendAfter if not null. PAS is
+			  at the beginning of the second raw Node.
+			  	- If Flag is not "Newline", the first raw Node is appended with appendAfter if
+			  	  not null. PAS is at the beginning of the first raw Node.
 		7. Auto-merge dirty leaves.
 
 		# PAS
@@ -3576,18 +3742,24 @@ export function removeAndAppend(
 	const { leaf: endLeaf, range: endRange } = selections[1];
 
 	// Step 2
-	const appendBefore = new Leaf({
-		text: startLeaf.text.substring(0, startRange[0])
-	});
-	copyLeafStyles(appendBefore, startLeaf);
-	appendBefore.consumed = false;
-	DirtyNewLeaves.push(appendBefore);
+	let appendBefore = null;
+	if (isTextLeaf(startLeaf)) {
+		appendBefore = new Leaf({
+			text: startLeaf.text.substring(0, startRange[0])
+		});
+		copyLeafStyles(appendBefore, startLeaf);
+		appendBefore.consumed = false;
+		DirtyNewLeaves.push(appendBefore);
+	}
 
 	// Step 3
-	const { startLeaf: appendAfter } =
-		copyLeafChain(endLeaf, null, [endRange[1], endLeaf.text.length], null);
-	appendAfter.consumed = false;
-	DirtyNewLeaves.push(appendAfter);
+	let appendAfter = null;
+	if (isTextLeaf(endLeaf)) {
+		const endCopy =	copyLeafChain(endLeaf, null, [endRange[1], endLeaf.text.length], null);
+		appendAfter = endCopy.startLeaf;
+		appendAfter.consumed = false;
+		DirtyNewLeaves.push(appendAfter);
+	}
 
 	// pas
 	let pasl = null; // pasl is the Leaf for PAS
@@ -3595,8 +3767,42 @@ export function removeAndAppend(
 
 	// Step 4
 	if (startLeaf === endLeaf) {
-		if (isZeroLeaf(startLeaf) && flag === _NEWLINE_) {
-			// 4.1 // $FlowFixMe
+		if (appendBefore === null || appendAfter === null) {
+			// Non-text
+			// Find root Node
+			let rn = startLeaf.parent; // $FlowFixMe
+			while (rn.parent !== null) {
+				rn = rn.parent;
+			}
+			if (flag === _NEWLINE_) {
+				// Grow a raw Node
+				const raw = new Node();
+				const zl = new Leaf();
+				setParentLink(zl, raw);
+				// Grow after root Node // $FlowFixMe
+				chainNodeChainBetween(raw, raw, rn, rn.nextNode);
+				// pas
+				pasl = zl;
+				os = 0;
+			} else {
+				const raw = new Node();
+				const zl = new Leaf();
+				setParentLink(zl, raw);
+				// Replace with a raw Node // $FlowFixMe
+				if (rn.prevNode === null && rn.nextNode === null) {
+					// Detach DocumentRoot firstChild
+					detachFirstChild(null);
+					// Set parent link
+					setParentLink(raw, null);
+				} else { // $FlowFixMe
+					chainNodeChainBetween(raw, raw, rn.prevNode, rn.nextNode);
+				}
+				// pas
+				pasl = zl;
+				os = 0;
+			}
+		} else if (isZeroLeaf(startLeaf) && flag === _NEWLINE_) {
+			// 4.2 // $FlowFixMe
 			const nn = new Node({ nodeType: startLeaf.parent.nodeType }); // $FlowFixMe
 			copyNodeStyles(nn, startLeaf.parent);
 			const zl = new Leaf();
@@ -3607,7 +3813,7 @@ export function removeAndAppend(
 			pasl = zl;
 			os = 0;
 		} else if (!isZeroLeaf(startLeaf) && flag === _NEWLINE_) {
-			// 4.2
+			// 4.3
 			const p = startLeaf.parent;
 			// Replace startLeaf
 			const prevStart = startLeaf.prevLeaf;
@@ -3629,7 +3835,7 @@ export function removeAndAppend(
 			pasl = appendAfter;
 			os = 0;
 		} else if (startRange[0] === startRange[1]) {
-			// 4.3
+			// 4.4
 			// If selection is zero-width
 			if (flag === _BACKSPACE_) {
 				if (startRange[0] === 0 || isZeroLeaf(startLeaf)) {
@@ -3637,19 +3843,27 @@ export function removeAndAppend(
 					if (startLeaf.prevLeaf === null) {
 						const prevLC = getPrevLeafChain(startLeaf);
 						if (prevLC !== null) { // $FlowFixMe
-							removeNode(startLeaf.parent);
-							// Get the last Leaf of the previous LeafChain
-							let l = prevLC;
-							while (l.nextLeaf !== null) {
-								l = l.nextLeaf;
+							if (isTextLeaf(prevLC)) {
+								removeNode(startLeaf.parent);
+								// Get the last Leaf of the previous LeafChain
+								let l = prevLC;
+								while (l.nextLeaf !== null) {
+									l = l.nextLeaf;
+								}
+								if (!isZeroLeaf(startLeaf)) {
+									// Chain appendAfter after l
+									chainLeaf(appendAfter, l);
+								}
+								// pas
+								pasl = l;
+								os = isZeroLeaf(l) ? 0 : l.text.length;
+							} else {
+								// If prevLC is non-text, remove it instead
+								removeNode(prevLC.parent);
+								// pas
+								pasl = startLeaf;
+								os = 0;
 							}
-							if (!isZeroLeaf(startLeaf)) {
-								// Chain appendAfter after l
-								chainLeaf(appendAfter, l);
-							}
-							// pas
-							pasl = l;
-							os = isZeroLeaf(l) ? 0 : l.text.length;
 						} else {
 							// Nothing to "Backspace"
 							return;
@@ -3671,7 +3885,13 @@ export function removeAndAppend(
 					if (startLeaf.nextLeaf === null) {
 						const nextLC = getNextLeafChain(startLeaf);
 						if (nextLC !== null) {
-							if (isZeroLeaf(startLeaf)) { // $FlowFixMe
+							if (!isTextLeaf(nextLC)) {
+								// nextLC is non-text, remove it instead
+								removeNode(nextLC.parent);
+								// pas
+								pasl = startLeaf;
+								os = isZeroLeaf(startLeaf) ? 0 : startLeaf.text.length;
+							} else if (isZeroLeaf(startLeaf)) { // $FlowFixMe
 								removeNode(startLeaf.parent);
 								// pas
 								pasl = nextLC;
@@ -3704,11 +3924,15 @@ export function removeAndAppend(
 				}
 			}
 		} else if (flag !== _NEWLINE_) {
-			// 4.4
+			// 4.5
 			applyLeafText(startLeaf, startRange, '');
 			return;
 		}
 	} else {
+		// Step 5.1
+		if (!isTextLeaf(startLeaf) && startLeaf.parent === endLeaf.parent) {
+			throw new Error('Non-text Leaves cannot have prevLeaf or nextLeaf.');
+		}
 		// Step 5 & 6
 		if (startLeaf.parent !== endLeaf.parent) {
 			// startLeaf and endLeaf have different parents
@@ -3718,11 +3942,71 @@ export function removeAndAppend(
 				removeNode(currentLC.parent); // $FlowFixMe
 				currentLC = getNextLeafChain(currentLC);
 			}
-			// Remove endLeaf's parent too // $FlowFixMe
+			// Remove endLeaf's parent too
 			removeNode(endLeaf.parent);
 		}
 
-		if (flag === _NEWLINE_) {
+		if (appendBefore === null) {
+			// startLeaf is non-text
+			// Find root Node
+			let rn = startLeaf.parent; // $FlowFixMe
+			while (rn.parent !== null) {
+				rn = rn.parent;
+			}
+			// Always replace root Node with a raw Node // $FlowFixMe
+			if (rn.prevNode === null && rn.nextNode === null) {
+				// Empty DocumentRoot
+				detachFirstChild(null);
+			}
+			// Create first raw Node
+			const raw1 = new Node();
+			if (flag === _NEWLINE_) {
+				const zl1 = new Leaf();
+				setParentLink(zl1, raw1);
+				// Grow another raw Node
+				const raw2 = new Node();
+				if (appendAfter === null) {
+					const zl2 = new Leaf();
+					setParentLink(zl2, raw2);
+					// pas
+					pasl = zl2;
+					os = 0;
+				} else {
+					setParentLink(appendAfter, raw2);
+					// pas
+					pasl = appendAfter;
+					os = 0;
+				}
+				// Chain after first raw Node
+				chainNode(raw2, raw1);
+				// Replace
+				if (DocumentRoot.firstChild === null) {
+					setParentLink(raw1, null);
+				} else { // $FlowFixMe
+					chainNodeChainBetween(raw1, raw2, rn.prevNode, rn.nextNode);
+				}
+			} else {
+				// append first Node with either zeroLeaf or appendAfter
+				if (appendAfter === null) {
+					const zl1 = new Leaf();
+					setParentLink(zl1, raw1);
+					// pas
+					pasl = zl1;
+					os = 0;
+				} else {
+					setParentLink(appendAfter, raw1);
+					// pas
+					pasl = appendAfter;
+					os = 0;
+				}
+				// Replace
+				if (DocumentRoot.firstChild === null) {
+					setParentLink(raw1, null);
+				} else { // $FlowFixMe
+					chainNodeChainBetween(raw1, raw1, rn.prevNode, rn.nextNode);
+				}
+			}
+		} else if (flag === _NEWLINE_) {
 			const p = startLeaf.parent;
 			if (!isZeroLeaf(startLeaf)) {
 				// Replace startLeaf
@@ -3740,13 +4024,18 @@ export function removeAndAppend(
 			// Grow new Node with appendAfter // $FlowFixMe
 			const nn = new Node({ nodeType: p.nodeType }); // $FlowFixMe
 			copyNodeStyles(nn, p);
-			setParentLink(appendAfter, nn); // $FlowFixMe
+			if (appendAfter === null) {
+				const zl = new Leaf();
+				setParentLink(zl, nn);
+			} else {
+				setParentLink(appendAfter, nn);
+			} // $FlowFixMe
 			chainNodeChainBetween(nn, nn, p, p.nextNode);
 			// pas
 			pasl = appendAfter;
 			os = 0;
 		} else {
-			chainLeaf(appendAfter, appendBefore);
+			if (appendAfter !== null) chainLeaf(appendAfter, appendBefore);
 			// Replace startLeaf
 			const prevStart = startLeaf.prevLeaf;
 			// Replace startLeaf with appendBefore
@@ -3787,6 +4076,16 @@ export function removeAndAppend(
 				  that of the first selected Leaf.
 			3. Remove + Append (removeAndAppend)
 				- Replacement is empty "pure string".
+		- About non-text Leaves:
+			1. Append + Grow
+				- startLeaf in selections is a text Leaf.
+					- appendAndGrow() does not handle non-text Leaves in NodeChain replacement but
+					  will handle them in LeafChain.
+			2. Shatter + Insert
+				- startLeaf in selections is non-text, or
+				- Replacement is "NodeChain", and its first Leaf is non-text.
+			3. Remove + Append
+				- Same
 	@ params
 		selections: Array<SelectionObject>[2]
 			- leaf: Leaf object
@@ -3807,6 +4106,8 @@ export function applyBranchText(
 	let rootBT = false;
 	let emptyString = false;
 	let isNodeChain = false;
+	// I didn't use a variable for non-text condition because sameNodeType is only true
+	// when both startLeaf and firstLeaf are text Leaves.
 
 	const { leaf: startLeaf, range: startRange } = selections[0];
 	const { leaf: endLeaf, range: endRange } = selections[1];
@@ -3825,9 +4126,11 @@ export function applyBranchText(
 		const firstLeaf = findFirstLeafChain(replacement.startNode);
 		if (firstLeaf === null) {
 			throw new Error('All Nodes in replacement must not have null firstChild');
-		} // $FlowFixMe
-		if (startLeaf.parent.nodeType === firstLeaf.parent.nodeType) {
-			sameNodeType = true;
+		}
+		if (isTextLeaf(startLeaf) && isTextLeaf(firstLeaf)) { // $FlowFixMe
+			if (startLeaf.parent.nodeType === firstLeaf.parent.nodeType) {
+				sameNodeType = true;
+			}
 		}
 	}
 
@@ -3972,7 +4275,25 @@ export function applyLeafStyle(
 		// Set parent link
 		setParentLink(startLeaf, parent);
 	} else {
-		chainLeafChainBetween(startLeaf, endLeaf, prevLeaf, nextLeaf);
+		// Do not use chainLeafChainBetween because prevLeaf or nextLeaf can be new
+		// Instead, manually replace the current Leaf
+		// Whenever replacing, always unchain a LeafChain
+		const lc = new LeafChain({ startLeaf: leaf, endLeaf: leaf });
+		unchainLeaf(lc, _PAST_STACK_);
+		// Chain prevLeaf
+		startLeaf.prevLeaf = prevLeaf;
+		if (prevLeaf !== null) {
+			prevLeaf.nextLeaf = startLeaf;
+		} else { // $FlowFixMe
+			parent.firstChild = startLeaf;
+		}
+		// Chain nextLeaf
+		endLeaf.nextLeaf = nextLeaf;
+		if (nextLeaf !== null) {
+			nextLeaf.prevLeaf = endLeaf;
+		}
+		// Set parent Node
+		setParentNode(startLeaf, parent);
 	}
 }
 
@@ -4107,10 +4428,12 @@ export function redo(): void {
 
 		If TempHistoryPastStep is not empty:
 
-		4. Save current PAS to TempHistoryPastStep.
-		5. Set CONTINUOUS_ACTION to true/false.
-		6. Render.
-		7. Display PAS.
+		4. If DocumentRoot is empty, create a default Node with a zeroLeaf. (TODO)
+			- Overwrite PAS to be in the zeroLeaf. (TODO)
+		5. Save current PAS to TempHistoryPastStep.
+		6. Set CONTINUOUS_ACTION to true/false.
+		7. Render.
+		8. Display PAS.
 */
 
 /*

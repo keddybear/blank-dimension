@@ -94,10 +94,18 @@ export const LeafDataAttributes = {
 
 export class Leaf {
 	/*
+		A Leaf can a text Leaf or non-text Leaf.
+
+		A non-text Leaf cannot have prevLeaf or nextLeaf, and it cannot have more than one
+		Node. This must be enforced manually.
+	*/
+
+	/*
 		@ attributes
 		text: String - default: '\u200b' (zero-width space)
 		styles: LeafStyles object - default: new LeafStyles()
 		type: number - default: 0 (Leaf is text)
+		custom: Object | null - default: null (used for non-text Leaf)
 		prevLeaf: Leaf object - default: null
 		nextLeaf: Leaf object - default: null
 		new: Boolean - default true
@@ -111,6 +119,7 @@ export class Leaf {
 	text: string;
 	styles: LeafStyles;
 	type: number;
+	custom: Object | null;
 	prevLeaf: null | Leaf;
 	nextLeaf: null | Leaf;
 	new: boolean;
@@ -134,6 +143,7 @@ export class Leaf {
 		this.nextLeaf = props.nextLeaf || null;
 		// By default, Leaf is a text Leaf.
 		this.type = props.type || LeafTypes.TEXT;
+		this.custom = (typeof props.custom) === 'object' ? props.custom : null;
 		// When created, Leaf's parent is always null. Manually assign this.
 		// When assigned, every Leaf in the chain should have the same parent.
 		this.parent = null;
@@ -159,18 +169,6 @@ export class Leaf {
 }
 
 /*
-	isZeroLeaf:
-		- Check if a Leaf's text is only zero-width space.
-	@ params
-		leaf: Leaf object
-	@ return
-		Boolean
-*/
-export function isZeroLeaf(leaf: Leaf): boolean {
-	return leaf.text === '\u200b';
-}
-
-/*
 	isTextLeaf:
 		- Check if a Leaf is a text Leaf.
 	@ params
@@ -179,7 +177,19 @@ export function isZeroLeaf(leaf: Leaf): boolean {
 		Boolean
 */
 export function isTextLeaf(leaf: Leaf): boolean {
-	return leaf.type === 0;
+	return leaf.type === LeafTypes.TEXT;
+}
+
+/*
+	isZeroLeaf:
+		- Check if a Leaf's text is only zero-width space and its type is 0.
+	@ params
+		leaf: Leaf object
+	@ return
+		Boolean
+*/
+export function isZeroLeaf(leaf: Leaf): boolean {
+	return isTextLeaf(leaf) && leaf.text === '\u200b';
 }
 
 export class NullLeaf {

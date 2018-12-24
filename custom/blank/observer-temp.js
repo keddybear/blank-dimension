@@ -1,3 +1,4 @@
+/* eslint-disable */
 class BlankObserver {
 	constructor() {
 		this.observers = {};
@@ -20,5 +21,3 @@ class BlankObserver {
 		};
 	}
 }
-
-export default BlankObserver;

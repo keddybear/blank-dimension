@@ -1,8 +1,21 @@
 // @flow
+/*
+	This is where you render all Leaf types. Each Leaf type must comply with the
+	following:
+
+	1. If Leaf is a text Leaf, it must have a <span> that immediately contains
+	   the Leaf's text. The <span> must have a "leaf-key" data attribute, a
+	   "leaf-text" attribute and it must be stored in "selectRef".
+	2. If Leaf is a non-text Leaf, its root element must have a "leaf-key" data
+	   attribute, a "leaf-content" attribute, it must be stored in "selectRef",
+	   and it must have a ready-only input field as the last child to capture
+	   selection, alongside its leaf-content wrapper. The wrapper must have a
+	   "contenteditable=false" attribute.
+*/
 import * as React from 'react';
 
 // Blank Element imports
-import { Leaf, LeafStyles, LeafTypes, LeafDataAttributes } from '../../leaf';
+import { Leaf, LeafStyles, LeafTypes, LeafDataAttributes, isZeroLeaf } from '../../leaf';
 
 // Style imports // $FlowFixMe
 import './styles/basic.scss';
@@ -38,13 +51,20 @@ function renderLeaf(leaf: Leaf, selectRef: Object) {
 	switch (type) {
 		case IMAGE: {
 			const props = {
-				[LEAF_KEY_ATTR]: leaf.id.toString()
+				[LEAF_KEY_ATTR]: leaf.id.toString(),
+				[LEAF_CONTENT_ATTR]: ''
 			};
-			const props2 = {
-				[LEAF_CONTENT_ATTR]: '',
-				src: leaf.text
+			const imgProps = {
+				src: leaf.custom ? leaf.custom.src : ''
 			};
-			return <div {...props}><img {...props2} alt='' /></div>;
+			return (
+				<div {...props} ref={selectRef}>
+					<div contentEditable='false' suppressContentEditableWarning>
+						<img {...imgProps} alt='Source not found' />
+					</div>
+					<input readOnly />
+				</div>
+			);
 		}
 		case TEXT:
 		default: {
@@ -53,7 +73,11 @@ function renderLeaf(leaf: Leaf, selectRef: Object) {
 				[LEAF_KEY_ATTR]: leaf.id.toString(),
 				[LEAF_TEXT_ATTR]: ''
 			};
-			return <span {...props} style={style} ref={selectRef}>{ leaf.text }</span>;
+			return (
+				<span {...props} style={style} ref={selectRef}>
+					{ isZeroLeaf(leaf) ? '\u200b' : leaf.text }
+				</span>
+			);
 		}
 	}
 }

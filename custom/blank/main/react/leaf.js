@@ -43,11 +43,11 @@ class LeafComponent extends React.Component<LeafProps, LeafState> {
 		}
 		// Update ReactMap
 		ReactMap.set(this.leaf, this);
+		this.leaf.dirty = RenderFlags.CLEAN;
 	}
 
-	shouldComponentUpdate(): boolean {
-		if (this.state.update !== true) return false;
-		this.state.update = false;
+	shouldComponentUpdate(nextProps: LeafProps, nextState: LeafState): boolean {
+		if (nextState.update !== true) return false;
 		if (this.leaf.dirty === RenderFlags.DIRTY_SELF) {
 			this.leaf.dirty = RenderFlags.CLEAN;
 			return true;
@@ -56,13 +56,17 @@ class LeafComponent extends React.Component<LeafProps, LeafState> {
 		return false;
 	}
 
+	componentDidUpdate() {
+		this.state.update = false;
+	}
+
 	componentWillUnmount() {
 		// Update BlankMap
 		if (this.selectRef.current) {
 			BlankMap.delete(this.selectRef.current);
 		}
 		// Update ReactMap
-		ReactMap.delete(this.leaf);
+		if (this === ReactMap.get(this.leaf)) ReactMap.delete(this.leaf);
 		// Set dirty to CLEAN
 		this.leaf.dirty = RenderFlags.CLEAN;
 	}

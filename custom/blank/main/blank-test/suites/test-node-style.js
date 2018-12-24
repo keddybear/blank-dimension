@@ -1,8 +1,8 @@
 /* eslint-disable */
-import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../node';
-import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink } from '../leaf';
-import { History, BlankHistoryStep } from '../history';
-import { instanceOf, BlankFlags } from '../utils';
+import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../../node';
+import { Leaf, LeafStyles, NullLeaf, LeafChain, LeafText, ParentLink } from '../../leaf';
+import { History, BlankHistoryStep } from '../../history';
+import { instanceOf, BlankFlags } from '../../utils';
 import {
 	sameNodeStyles,
 	setNodeStyles,
@@ -40,9 +40,8 @@ import {
 	applyBranchType,
 	applyNodeStyle,
 	applyNodesStyle
-} from '../integration';
-
-const { expect } = require('chai');
+} from '../../integration';
+import { expect } from 'chai';
 
 BlankFlags.DISABLE_RENDER = true;
 
@@ -3167,7 +3166,6 @@ describe('Node Action Ops', function() {
 				expect(middle.nextNode).to.equal(n5);
 				middle.new = false;
 
-				console.log('TempHistoryPastStep.length: ' + TempHistoryPastStep.stack.length);
 				done();
 			});
 
@@ -3194,6 +3192,141 @@ describe('Node Action Ops', function() {
 				expect(middle.prevNode).to.equal(n3);
 				expect(middle.nodeType).to.equal(0);
 				expect(middle.nextNode).to.equal(n5);
+
+				done();
+			});
+
+		});
+
+		describe('Last LeafChain\'s parent is removed with level 2 shatter', function() {
+
+			const l1 = new Leaf({ text: 'l1' });
+			const l2 = new Leaf({ text: 'l2' });
+			const l3 = new Leaf({ text: 'l3' });
+			const l4 = new Leaf({ text: 'l4' });
+			const l5 = new Leaf({ text: 'l5' });
+			const l6 = new Leaf({ text: 'l6' });
+
+			const n1 = new Node({ nodeType: 2 });
+			const n2 = new Node({ nodeType: 3 });
+			const n3 = new Node({ nodeType: 3 });
+			const n4 = new Node({ nodeType: 2 });
+			const n5 = new Node({ nodeType: 3 });
+
+			/*
+				(2)---(3)---<l1>
+		        |	  |
+		        |	  (3)---<l2-l3>
+		        |
+		        (2)---(3)---<l4-l5-l6>
+		    */
+		    before(function(done) {
+				DocumentRoot.firstChild = null;
+				History.clear(_PAST_STACK_);
+				History.clear(_FUTURE_STACK_);
+				TempHistoryPastStep.clear();
+				TempHistoryFutureStep.clear();
+				
+				setParentLink(n1, null);
+					setParentLink(n2, n1);
+						setParentLink(l1, n2);
+					chainNode(n3, n2);
+						setParentLink(l2, n3);
+						chainLeaf(l3, l2);
+				chainNode(n4, n1);
+					setParentLink(n5, n4);
+						setParentLink(l4, n5);
+						chainLeaf(l5, l4);
+						chainLeaf(l6, l5);
+
+				n1.new = false;
+				n2.new = false;
+				n3.new = false;
+				n4.new = false;
+				n5.new = false;
+
+				l1.new = false;
+				l2.new = false;
+				l3.new = false;
+				l4.new = false;
+				l5.new = false;
+				l6.new = false;
+
+				done();
+			});
+
+			it('Apply [1, 3] to selections [l3, l5]', function(done) {
+				const selections = [{ leaf: l3, range: [0, l3.text.length] }, { leaf: l5, range: [0, l5.text.length] }];
+				const newBT = [1, 3];
+				applyBranchType(selections, newBT);
+
+				let cn = n1;
+					cn = cn.firstChild;
+					expect(cn).to.equal(n2);
+					expect(cn.nextNode).to.equal(null);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn.nodeType).to.equal(1);
+				expect(cn.new).to.be.true;
+				cn.new = false;
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+					expect(cn.new).to.be.true;
+					cn.new = false;
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l2);
+					cn = cn.nextNode;
+					expect(cn.nodeType).to.equal(3);
+					expect(cn).to.equal(n5);
+					expect(cn.nextNode).to.equal(null);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Undo', function(done) {
+				// Undo
+				readyTempHistorySteps();
+				undo();
+
+				let cn = n1;
+					cn = cn.firstChild;
+					expect(cn).to.equal(n2);
+					expect(cn.nextNode).to.equal(n3);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn).to.equal(n4);
+					cn = cn.firstChild;
+					expect(cn).to.equal(n5);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Redo', function(done) {
+				// Redo
+				readyTempHistorySteps();
+				redo();
+
+				let cn = n1;
+					cn = cn.firstChild;
+					expect(cn).to.equal(n2);
+					expect(cn.nextNode).to.equal(null);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn.nodeType).to.equal(1);
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l2);
+					cn = cn.nextNode;
+					expect(cn.nodeType).to.equal(3);
+					expect(cn).to.equal(n5);
+					expect(cn.nextNode).to.equal(null);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
 
 				done();
 			});

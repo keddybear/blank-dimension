@@ -1,4 +1,14 @@
 // @flow
+/*
+	~ What can be selected ~
+
+	There two types of selections: BlankSelection and BranchSelection.
+
+	BlankSelection only selects texts, and all non-text Leaves are not selectable.
+
+	BranchSelection, when its trigger key is pressed, will select the entire branch,
+	allowing user to edit the style and content of all Nodes and Leaves in that branch. (TODO)
+*/
 import { Leaf, isZeroLeaf, isTextLeaf, LeafDataAttributes, applyCaretStyle } from './leaf';
 import { Node as BlankNode, DocumentRoot } from './node';
 import { ReactMap } from './render';
@@ -81,13 +91,11 @@ export type SelectionObject = {
 
 /*
 	getNearestLeafSelection:
-		- What it intends to find is either "data-leaf-text" or "data-leaf-content".
-			- If a "data-leaf-content" is found, the offset is set to 0, but it means the
-			  entire Leaf is selected.
+		- What it intends to find is either "data-leaf-text".
 			- If a "data-leaf-text" is found, and if it's the immediate parent of the starting
 			  node, the offset stays the same. Otherwise, set the offset to either the
 			  beginning or the end of its Leaf's text, depending on if the search is backward.
-		- The search will eventually stop at DocumentRoot.
+		- The search will only traverse up the parents. It won't traverse through silbings.
 		- Return a LeafSelection object or null if no HTMLElement is found.
 		- NOTE: Node in here is DOM Node object.
 	@ params
@@ -97,45 +105,26 @@ export type SelectionObject = {
 	@ return
 		sel: LeafSelection | null
 */
-function getNearestLeafSelection(
-	node: Node,
-	offset: number,
-	backward: boolean = false
-): LeafSelection | null {
+function getNearestLeafSelection(node: Node, offset: number): LeafSelection | null {
 	if (node === DocumentRoot.container) return null;
 	const { LEAF_TEXT_CAMEL, LEAF_CONTENT_CAMEL } = LeafDataAttributes;
 	let n = node;
 	let os = offset;
-	let findChild = true;
-	let resetOffset = false;
 	let el = null;
 	// Find either Leaf text or Leaf content
 	while (n) {
 		if (n instanceof HTMLElement) {
-			if (n.dataset[LEAF_TEXT_CAMEL]) {
+			if (n.dataset[LEAF_TEXT_CAMEL] !== undefined) {
 				el = n;
-				if (n.firstChild !== node) resetOffset = true;
 				break;
-			} else if (n.dataset[LEAF_CONTENT_CAMEL]) {
+			} else if (n.dataset[LEAF_CONTENT_CAMEL] !== undefined) {
 				el = n;
-				resetOffset = true;
 				break;
 			}
 		}
 		// No break -> keep searching
-		if (n.firstChild && findChild) {
-			n = n.firstChild;
-		} else if (!backward && n.nextSibling) {
-			n = n.nextSibling;
-			findChild = true;
-		} else if (backward && n.previousSibling) {
-			n = n.previousSibling;
-			findChild = true;
-		} else {
-			n = n.parentNode;
-			if (n === DocumentRoot.container) break;
-			findChild = false;
-		}
+		n = n.parentNode;
+		if (n === DocumentRoot.container) break;
 	}
 
 	if (el === null) return null;
@@ -146,9 +135,6 @@ function getNearestLeafSelection(
 		// $FlowFixMe
 		if (isZeroLeaf(leaf) || !isTextLeaf(leaf)) {
 			os = 0;
-		} else if (resetOffset) {
-			// $FlowFixMe
-			os = backward ? leaf.text.length : 0;
 		}
 		// $FlowFixMe
 		return { leaf, offset: os };
@@ -218,10 +204,12 @@ export class BlankSelection {
 				backward = true;
 			}
 
-			// Find the nearest Leaf Elements from anchorNode and focusNode
-			const startLS = getNearestLeafSelection(sel.anchorNode, sel.anchorOffset, backward);
+			// Find the nearest text Leaves from anchorNode and focusNode
+			const startLS = getNearestLeafSelection(sel.anchorNode, sel.anchorOffset);
 			if (startLS === null) return;
-			const endLS = getNearestLeafSelection(sel.focusNode, sel.focusOffset, backward);
+			const endLS = !sel.isCollapsed ?
+				getNearestLeafSelection(sel.focusNode, sel.focusOffset) :
+				startLS;
 			if (endLS === null) return;
 
 			// Create SelectionObjects for start and end
@@ -374,6 +362,7 @@ export function toSelections(selection: BlankSelection): Array<SelectionObject> 
 		- Update native selection from BlankSelection.
 		- Do nothing if BlankSelection is invalid or no corresponding DOM Element
 		  is found.
+		- Do nothing is either selected Leaf is non-text
 		- Set SELECTION_FROM_BS to true, so onSelectionChangeHandler() won't create
 		  a new BlankSelection.
 	@ params
@@ -386,10 +375,10 @@ export function setWindowSelection(selection: BlankSelection) {
 	if (selection.start === null || selection.end === null) return;
 
 	const { start, end } = selection;
-	// Get startNode and endNode (DOM) using ReactMap
+	// Get startNode and endNode (DOM) using ReactMap // $FlowFixMe
 	const sComp = ReactMap.get(start.leaf);
 	if (!sComp) return; // $FlowFixMe
-	if (!sComp.selectRef) return;
+	if (!sComp.selectRef) return; // $FlowFixMe
 	const eComp = ReactMap.get(end.leaf);
 	if (!eComp) return; // $FlowFixMe
 	if (!eComp.selectRef) return;
@@ -411,8 +400,8 @@ export function setWindowSelection(selection: BlankSelection) {
 		anchorNode = s.firstChild;
 		anchorOffset = start.range[0]; // eslint-disable-line
 	} else {
-		anchorNode = s.previousSibling;
-		anchorOffset = 0;
+		anchorNode = s;
+		anchorOffset = s.children.length - 1;
 	}
 
 	// Get focusNode and focusOffset
@@ -420,8 +409,8 @@ export function setWindowSelection(selection: BlankSelection) {
 		focusNode = e.firstChild;
 		focusOffset = end.range[1]; // eslint-disable-line
 	} else {
-		anchorNode = e.nextSibling;
-		focusOffset = 0;
+		focusNode = e;
+		focusOffset = e.children.length - 1;
 	}
 
 	if (anchorNode !== null && focusNode !== null) {

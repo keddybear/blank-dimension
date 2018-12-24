@@ -6,7 +6,7 @@ import * as React from 'react';
 import { Node } from '../node';
 
 // Blank Component imports (circular dependency)
-import ChainComponent from './node';
+import ChainComponent from './chain';
 import renderNode from './nodes/basic';
 
 // Render & Mapping imports
@@ -47,11 +47,11 @@ class NodeComponent extends React.Component<NodeProps, NodeState> {
 		}
 		// Update ReactMap
 		ReactMap.set(this.node, this);
+		this.node.dirty = RenderFlags.CLEAN;
 	}
 
-	shouldComponentUpdate(): boolean {
-		if (this.state.update !== true) return false;
-		this.state.update = false;
+	shouldComponentUpdate(nextProps: NodeProps, nextState: NodeState): boolean {
+		if (nextState.update !== true) return false;
 		if (this.node.dirty === RenderFlags.DIRTY_SELF) {
 			this.node.dirty = RenderFlags.CLEAN;
 			return true;
@@ -62,13 +62,17 @@ class NodeComponent extends React.Component<NodeProps, NodeState> {
 		return false;
 	}
 
+	componentDidUpdate() {
+		this.state.update = false;
+	}
+
 	componentWillUnmount() {
 		// Update BlankMap
 		if (this.selectRef.current) {
 			BlankMap.delete(this.selectRef.current);
 		}
 		// Update ReactMap
-		ReactMap.delete(this.node);
+		if (this === ReactMap.get(this.node)) ReactMap.delete(this.node);
 		// Set dirty to CLEAN
 		this.node.dirty = RenderFlags.CLEAN;
 	}
@@ -76,7 +80,7 @@ class NodeComponent extends React.Component<NodeProps, NodeState> {
 	render() {
 		let chain = null;
 		if (this.node.firstChild) { // $FlowFixMe
-			chain = <ChainComponent firstChild={this.node.firstChild} chainRef={this.chainRef} />;
+			chain = <ChainComponent parent={this.node} chainRef={this.chainRef} />;
 		}
 		return (
 			<React.Fragment>

@@ -2,7 +2,10 @@
 
 // Node type enum
 export const NodeTypes = {
-	PARAGRAPH: 0
+	PARAGRAPH: 0,
+	ORDERED_LIST: 1,
+	UNORDERED_LIST: 2,
+	LIST_ITEM: 3
 };
 
 let BlankCounterExists = false;
@@ -145,7 +148,6 @@ export class Node {
 	*/
 	styles: NodeStyles | null;
 	nodeType: number;
-	branchType: Array<number> | null; // TODO
 	prevNode: Node | null;
 	nextNode: Node | null;
 	firstChild: any | null;
@@ -174,13 +176,6 @@ export class Node {
 
 		// Once created, Node is always new
 		this.new = true;
-
-		// This value is only assigned after render() and when the firstChild is a Leaf.
-		// It remembers the shallow BranchType for its child, so that when applying a new
-		// BranchType to a selection of LeafChains, the shallow comparison is faster.
-		// If this is implemented, findNextLeafChain() no longer needs to return BranchType.
-		// (TODO)
-		this.branchType = null;
 
 		// Identity check
 		this.Node = true;
@@ -473,7 +468,7 @@ export class RootNode {
 	*/
 	firstChild: Node | null;
 	new: boolean;
-	container: HTMLElement | null; // TODO (Should not be null)
+	container: HTMLElement | null;
 	RootNode: boolean;
 	renderPos: number | null;
 	dirty: number;
@@ -486,9 +481,8 @@ export class RootNode {
 		// RootNode is always old
 		this.new = false;
 
-		// Temporary (TODO)
-		this.container = (typeof window !== 'undefined' && window.document) ?
-			window.document.getElementById(`${BLANK_EDITOR_ID}`) : null;
+		// DocumentRoot's corresponding HTMLElement is assigned in RootComponent
+		this.container = null;
 
 		// Identity check
 		this.RootNode = true;
