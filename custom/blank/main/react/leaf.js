@@ -9,7 +9,7 @@ import { Leaf } from '../leaf';
 import renderLeaf from './leaves/basic';
 
 // Render & Mapping imports
-import { ReactMap, RenderFlags } from '../render';
+import { ReactMap, RenderFlags, AsyncRenderManager } from '../render';
 import { BlankMap } from '../selection';
 
 type LeafProps = { leaf: Leaf };
@@ -22,16 +22,19 @@ class LeafComponent extends React.Component<LeafProps, LeafState> {
 		selectRef: Object - { current: null }
 		props: LeafProps
 		state: LeafState
+		dirty: boolean
 	*/
 
 	leaf: Leaf; // eslint-disable-line
 	selectRef: { current: null | React.ElementRef<*> };
+	dirty: boolean;
 
 	constructor(props: LeafProps) {
 		super(props);
 		this.leaf = this.props.leaf;
 		this.selectRef = React.createRef();
 		this.state = { update: false };
+		this.dirty = false;
 	}
 
 	componentDidMount() {
@@ -47,17 +50,24 @@ class LeafComponent extends React.Component<LeafProps, LeafState> {
 	}
 
 	shouldComponentUpdate(nextProps: LeafProps, nextState: LeafState): boolean {
-		if (nextState.update !== true) return false;
+		if (!nextState.update || !this.dirty) return false;
 		if (this.leaf.dirty === RenderFlags.DIRTY_SELF) {
 			this.leaf.dirty = RenderFlags.CLEAN;
 			return true;
 		}
+		// Will not update
 		this.leaf.dirty = RenderFlags.CLEAN;
+		this.dirty = false;
+		AsyncRenderManager.totalUpdates -= 1;
+		AsyncRenderManager.fire();
 		return false;
 	}
 
 	componentDidUpdate() {
 		this.state.update = false;
+		this.dirty = false;
+		AsyncRenderManager.totalUpdates -= 1;
+		AsyncRenderManager.fire();
 	}
 
 	componentWillUnmount() {
@@ -69,6 +79,8 @@ class LeafComponent extends React.Component<LeafProps, LeafState> {
 		if (this === ReactMap.get(this.leaf)) ReactMap.delete(this.leaf);
 		// Set dirty to CLEAN
 		this.leaf.dirty = RenderFlags.CLEAN;
+		// Decrease ARM totalUpdates by 1 if marked dirty by setState
+		if (this.dirty) AsyncRenderManager.totalUpdates -= 1;
 	}
 
 	render() {

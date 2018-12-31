@@ -442,7 +442,7 @@ export function setWindowSelection(selection: BlankSelection) {
 		  to be copied to BeforeActionSelection (BAS).
 		  	- If the selection change is from PAS (SELECTION_FROM_BS is true), BAS
 		  	  will simply copy from PAS. Then set SELECTION_FROM_BS to false.
-		- If BlankEditor is currently composing (IS_COMPOSING is true), do nothing,
+		- If BlankEditor is currently running a task (RUNNING is true), do nothing,
 		  unless SELECTION_FROM_BS is true.
 		- Set CONTINUOUS_ACTION to false, if native selection is not from PAS.
 		- Update CaretStyle, if BAS is zero-width.
@@ -451,7 +451,7 @@ export function onSelectionChangeHandler(): void {
 	if (BlankFlags.SELECTION_FROM_BS) {
 		copyBlankSelection(BeforeActionSelection, PostActionSelection);
 		BlankFlags.SELECTION_FROM_BS = false;
-	} else if (!BlankFlags.IS_COMPOSING && !BlankFlags.IS_DRAGGING_SELECTION) {
+	} else if (!BlankFlags.RUNNING) {
 		const s = new BlankSelection();
 		copyBlankSelection(BeforeActionSelection, s);
 		BlankFlags.CONTINUOUS_ACTION = false;

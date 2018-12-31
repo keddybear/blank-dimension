@@ -2,8 +2,8 @@
 import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from './node';
 import { Leaf, isZeroLeaf, isTextLeaf, LeafStyles, CaretStyle, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from './leaf';
 import { History, BlankHistoryStep, copyHistoryStep } from './history';
-import { type SelectionObject, copySelectionObject, BeforeActionSelection, PostActionSelection, setPAS, setWindowSelection, copyBlankSelection } from './selection';
-import { markBlankElementDirty } from './render';
+import { type SelectionObject, BlankSelection, _MANUAL_, copySelectionObject, BeforeActionSelection, PostActionSelection, setPAS, setWindowSelection, copyBlankSelection, toSelections } from './selection';
+import { markBlankElementDirty, render, AsyncRenderManager } from './render';
 import { instanceOf, BlankFlags } from './utils';
 
 /*
@@ -3080,6 +3080,8 @@ export function copyBranchText(selections: Array<SelectionObject>): void {
 	copyFromClipboard:
 		- Same as copyBranchText() but return a copy of what's in Clipboard.
 		- If Clipboard is empty, return null.
+	@ params
+		stopAtNonText: boolean - default: false
 	@ return
 		copy: Object | null
 			- startNode: Node | null
@@ -3087,7 +3089,7 @@ export function copyBranchText(selections: Array<SelectionObject>): void {
 			- startLeaf: Leaf | null
 			- endLeaf: Leaf | null
 */
-export function copyFromClipboard(): Object | null {
+export function copyFromClipboard(stopAtNonText: boolean = false): Object | null {
 	if (instanceOf(Clipboard.firstChild, 'Leaf')) {
 		// $FlowFixMe
 		const copy = copyLeafChain(Clipboard.startLeaf, null, null, null);
@@ -3099,12 +3101,13 @@ export function copyFromClipboard(): Object | null {
 		};
 	} else if (instanceOf(Clipboard.firstChild, 'Node')) {
 		// $FlowFixMe
-		const copy = copyNodeChain(Clipboard.startLeaf, Clipboard.endLeaf, null, null);
+		const copy = copyNodeChain(Clipboard.startLeaf, Clipboard.endLeaf, null, null, stopAtNonText);
 		return {
 			startNode: copy.startNode,
 			endNode: copy.endNode,
 			startLeaf: copy.firstLeaf,
-			endLeaf: copy.lastLeaf
+			endLeaf: copy.lastLeaf,
+			stopLeaf: copy.stopLeaf
 		};
 	}
 	return null;
@@ -4415,11 +4418,12 @@ export function redo(): void {
 
 /*
 	In this section, Action Ops will be wrapped with Selection, History and Render Ops
-	to perform the "Complete Action".
+	to perform the "Complete Action". If users need more actions, add them here.
 
 	Example:
 
 	Complete Action Op for action A:
+		0. Set RUNNING to true.
 		1. If not CONTINUOUS_ACTION
 			- call readyTempHistorySteps().
 			- Save current BAS to TempHistoryPastStep.
@@ -4428,46 +4432,456 @@ export function redo(): void {
 
 		If TempHistoryPastStep is not empty:
 
-		4. If DocumentRoot is empty, create a default Node with a zeroLeaf. (TODO)
-			- Overwrite PAS to be in the zeroLeaf. (TODO)
+		4. Handle empty document after action.
 		5. Save current PAS to TempHistoryPastStep.
 		6. Set CONTINUOUS_ACTION to true/false.
-		7. Render.
-		8. Display PAS.
+		7. Render, then callback.
+			- Display PAS.
+			- Set RUNNING to false.
+
+		If TempHistoryPastStep is empty:
+
+		8. Set RUNNING to false.
 */
 
 /*
+	defaultRenderCallback:
+		- This is the default callback after render() is finished.
+		- Set window selection from PAS.
+		- Set RUNNING to false.
+*/
+function defaultRenderCallback(): void {
+	setWindowSelection(PostActionSelection);
+	BlankFlags.RUNNING = false;
+}
+AsyncRenderManager.register(defaultRenderCallback);
+
+/*
+	handleEmptyDocument:
+		- If DocumentRoot is empty, create a default Node with a zeroLeaf.
+			- Overwrite PAS to be in the zeroLeaf.
+		- Do nothing if not empty.
+*/
+export function handleEmptyDocument(): void {
+	if (DocumentRoot.firstChild !== null) return;
+	// Create a default Node with a zeroLeaf
+	const n = new Node();
+	const l = new Leaf();
+	setParentLink(l, n);
+	setParentLink(n, null);
+	// PAS
+	setPAS({ leaf: l, range: [0, 0] }, { leaf: l, range: [0, 0] });
+}
+
+/*
+	splitSelectionByNonText:
+		- Split a BlankSelection into an array of BlankSelections by non-text Leaves.
+		- It can be used by Overkill. (TODO)
+	@ params
+		selection: BlankSelection
+	@ return
+		splits: Array<BlankSelection>
+*/
+export function splitSelectionByNonText(selection: BlankSelection): Array<BlankSelection> {
+	const splits = [];
+
+	const { start, end } = selection;
+	if (start === null || end === null) return splits;
+
+	let currentL = start.leaf;
+	let nextL = null;
+	let currentS = null;
+	let currentE = null;
+	while (currentL !== null) {
+		// Get next LeafChain
+		nextL = currentL === end.leaf ? null : getNextLeafChain(currentL);
+		// If current Leaf is text Leaf, assign it to currentS and/or currentE
+		if (isTextLeaf(currentL)) {
+			// Assign current Leaf to currentS if it has no value
+			if (currentS === null) {
+				currentS = currentL;
+			}
+			// Assign current Leaf to currentE if nextL is null or non-text
+			if (nextL === null || !isTextLeaf(nextL)) {
+				currentE = currentL;
+				// If both currentS and currentE are not empty, create BlankSelection
+				// to be pushed into splits
+				if (currentS !== null) {
+					const bs = new BlankSelection(_MANUAL_);
+					bs.start = { leaf: currentS, range: [0, 0] };
+					bs.end = { leaf: currentE, range: [0, 0] };
+					splits.push(bs);
+					// Reset currentS and currentE
+					currentS = null;
+					currentE = null;
+				}
+			}
+		}
+		// currentL becomes nextL
+		currentL = nextL;
+	}
+	// Return splitting result, which could be empty
+	return splits;
+}
+
+/*
 	Complete undo():
+		0. Set RUNNING to true.
 		1. Call readyTempHistorySteps().
 		2. Call undo().
+
+		If TempHistoryFutureStep is not empty:
+
 		3. No need to save PAS to TempHistoryFutureStep, whose pas is copied from pastStep.
 		4. CONTINUOUS_ACTION is false.
-		5. Render.
-		6. Display PAS.
+		5. Render, then callback.
+			- Display PAS.
+			- Set RUNNING to false.
+
+		If TempHistoryPastStep is empty:
+
+		6. Set RUNNING to false.
 */
-export const ACTION_UNDO = 1;
 export function undo$COMPLETE(): void {
 	readyTempHistorySteps();
 	undo();
-	BlankFlags.CONTINUOUS_ACTION = false;
-	// Render()
-	setWindowSelection(PostActionSelection);
+	if (TempHistoryFutureStep.stack.length > 0) {
+		BlankFlags.CONTINUOUS_ACTION = false;
+		render();
+	} else {
+		BlankFlags.RUNNING = false;
+	}
 }
 
 /*
 	Complete redo():
+		0. Set RUNNING to true.
 		1. Call readyTempHistorySteps().
 		2. Call redo().
+
+		If TempHistoryPastStep is not empty:
+
 		3. No need to save PAS to TempHistoryPastStep, whose pas is copied from futureStep.
 		4. CONTINUOUS_ACTION is false.
-		5. Render.
-		6. Display PAS.
+		5. Render, then callback.
+			- Display PAS.
+			- Set RUNNING to false.
+
+		If TempHistoryPastStep is empty:
+
+		6. Set RUNNING to false.
 */
-export const ACTION_REDO = 2;
 export function redo$COMPLETE(): void {
 	readyTempHistorySteps();
 	redo();
-	BlankFlags.CONTINUOUS_ACTION = false;
-	// Render()
-	setWindowSelection(PostActionSelection);
+	if (TempHistoryPastStep.stack.length > 0) {
+		BlankFlags.CONTINUOUS_ACTION = false;
+		render();
+		setWindowSelection(PostActionSelection);
+	} else {
+		BlankFlags.RUNNING = false;
+	}
+}
+
+/*
+	Complete applyLeavesStyle():
+		0. Set RUNNING to true.
+		1. If not CONTINUOUS_ACTION
+			- call readyTempHistorySteps().
+			- Save current BAS to TempHistoryPastStep.
+		2. Prepare BAS for action.
+			- Skip non-text Leaves.
+		3. Perform the action on BAS.
+
+		If TempHistoryPastStep is not empty:
+
+		4. Handle empty document.
+		5. Save current PAS to TempHistoryPastStep.
+		6. Set CONTINUOUS_ACTION to false. (applyLeavesStyle() is not a continue-able action.)
+		7. Render, then callback.
+			- Display PAS.
+			- Set RUNNING to false.
+
+		If TempHistoryPastStep is empty:
+
+		8. Set RUNNING to false.
+*/
+export function applyLeavesStyle$COMPLETE(newStyles: Object): void {
+	// Step 1
+	if (!BlankFlags.CONTINUOUS_ACTION) {
+		readyTempHistorySteps();
+		saveBAS(_FROM_PAST_);
+	}
+	// Step 2
+	const selections = toSelections(BeforeActionSelection);
+	// Step 3
+	applyLeavesStyle(selections, newStyles);
+
+	// If TempHistoryPastStep is not empty, perform the following.
+	if (TempHistoryPastStep.stack.length > 0) {
+		// Step 4
+		handleEmptyDocument();
+		// Step 5
+		savePAS(_FROM_PAST_);
+		// Step 6
+		BlankFlags.CONTINUOUS_ACTION = false;
+		// Step 7
+		render();
+	} else {
+		// Step 8
+		BlankFlags.RUNNING = false;
+	}
+}
+
+/*
+	Complete applyNodesStyle():
+		1. If not CONTINUOUS_ACTION
+			- call readyTempHistorySteps().
+			- Save current BAS to TempHistoryPastStep.
+		2. Prepare BAS for action.
+		3. Perform the action on BAS.
+
+		If TempHistoryPastStep is not empty:
+
+		4. Handle empty document.
+		5. Save current PAS to TempHistoryPastStep.
+		6. Set CONTINUOUS_ACTION to false. (applyNodesStyle() is not a continue-able action.)
+		7. Render, then callback.
+			- Display PAS.
+			- Set RUNNING to false.
+
+		If TempHistoryPastStep is empty:
+
+		8. Set RUNNING to false.
+*/
+export function applyNodesStyle$COMPLETE(newStyles: Object = {}): void {
+	// Step 1
+	if (!BlankFlags.CONTINUOUS_ACTION) {
+		readyTempHistorySteps();
+		saveBAS(_FROM_PAST_);
+	}
+	// Step 2
+	const selections = toSelections(BeforeActionSelection);
+	// Step 3
+	applyNodesStyle(selections, newStyles);
+
+	// If TempHistoryPastStep is not empty, perform the following.
+	if (TempHistoryPastStep.stack.length > 0) {
+		// Step 4
+		handleEmptyDocument();
+		// Step 5
+		savePAS(_FROM_PAST_);
+		// Step 6
+		BlankFlags.CONTINUOUS_ACTION = false;
+		// Step 7
+		render();
+	} else {
+		// Step 8
+		BlankFlags.RUNNING = false;
+	}
+}
+
+/*
+	Complete applyBranchType():
+		1. If not CONTINUOUS_ACTION
+			- call readyTempHistorySteps().
+			- Save current BAS to TempHistoryPastStep.
+		2. Prepare BAS for action.
+			- Split selections by non-text Leaf, and call applyBranchType() on each
+			  selection.
+		3. Perform the action on BAS.
+
+		If TempHistoryPastStep is not empty:
+
+		4. Handle empty document.
+		5. Overwrite PAS to the same as BAS, then save it to TempHistoryPastStep.
+			- Because BAS has been split and applyBranchType() does not unchain or modify
+			  any Leaf.
+		6. Set CONTINUOUS_ACTION to false. (applyBranchType() is not a continue-able action.)
+		7. Render, then callback.
+			- Display PAS.
+			- Set RUNNING to false.
+
+		If TempHistoryPastStep is empty:
+
+		8. Set RUNNING to false.
+*/
+export function applyBranchType$COMPLETE(type: Array<number>): void {
+	// Step 1
+	if (!BlankFlags.CONTINUOUS_ACTION) {
+		readyTempHistorySteps();
+		saveBAS(_FROM_PAST_);
+	}
+	// Step 2
+	const splits = splitSelectionByNonText(BeforeActionSelection);
+	// Step 3
+	for (let i = 0; i < splits.length; i += 1) {
+		const selections = toSelections(splits[i]);
+		applyBranchType(selections, type);
+	}
+
+	// If TempHistoryPastStep is not empty, perform the following.
+	if (TempHistoryPastStep.stack.length > 0) {
+		// Step 4
+		handleEmptyDocument();
+		// Step 5
+		copyBlankSelection(PostActionSelection, BeforeActionSelection);
+		savePAS(_FROM_PAST_);
+		// Step 6
+		BlankFlags.CONTINUOUS_ACTION = false;
+		// Step 7
+		render();
+	} else {
+		// Step 8
+		BlankFlags.RUNNING = false;
+	}
+}
+
+/*
+	Complete applyBranchText():
+		1. If not CONTINUOUS_ACTION
+			- call readyTempHistorySteps().
+			- Save current BAS to TempHistoryPastStep.
+		2. Prepare BAS for action.
+		3. Perform the action on BAS.
+			- LeafChain and NodeChain replacement comes from Clipboard.
+			- If replacement is NodeChain, split at the first non-text Leaf.
+			- The second replacement is performed on PAS.
+
+		If TempHistoryPastStep is not empty:
+
+		4. Handle empty document.
+		5. Save current PAS to TempHistoryPastStep.
+		6. Set CONTINUOUS_ACTION to true. (applyBranchText() is a continue-able action.)
+		7. Render, then callback.
+			- Display PAS.
+			- Set RUNNING to false.
+
+		If TempHistoryPastStep is empty:
+
+		8. Set RUNNING to false.
+*/
+export const _PASTE_FROM_CLIPBOARD_ = 4; // eslint-disable-line
+export function applyBranchText$COMPLETE(
+	replacement: string,
+	flag: number | null = null
+): void {
+	// Step 1
+	if (!BlankFlags.CONTINUOUS_ACTION) {
+		readyTempHistorySteps();
+		saveBAS(_FROM_PAST_);
+	}
+	// Step 2
+	const selections = toSelections(BeforeActionSelection);
+	// Step 3
+	if (flag === _PASTE_FROM_CLIPBOARD_) {
+		if (Clipboard.firstChild === null) return;
+		if (instanceOf(Clipboard.firstChild, 'Leaf')) {
+			// LeafChain is replacement // $FlowFixMe
+			const copy = copyLeafChain(Clipboard.startLeaf, null, null, null);
+			const lc = new LeafChain({ startLeaf: copy.startLeaf, endLeaf: copy.endLeaf });
+			applyBranchText(selections, lc);
+		} else if (instanceOf(Clipboard.firstChild, 'Node')) {
+			// NodeChain is replacement
+			const copy = copyNodeChain( // $FlowFixMe
+				Clipboard.startLeaf, // $FlowFixMe
+				Clipboard.endLeaf,
+				null,
+				null,
+				_STOP_AT_NON_TEXT_
+			);
+			const nc = new NodeChain({ startNode: copy.startNode, endNode: copy.endNode });
+			applyBranchText(selections, nc);
+			// If replacement has been split
+			if (copy.stopLeaf !== null) {
+				// $FlowFixMe
+				const copy2 = copyNodeChain(copy.stopLeaf, Clipboard.endLeaf, null, null);
+				const nc2 = new NodeChain({ startNode: copy2.startNode, endNode: copy2.endNode });
+				applyBranchText(toSelections(PostActionSelection), nc2);
+			}
+		}
+	} else {
+		applyBranchText(selections, replacement, flag);
+	}
+
+	// If TempHistoryPastStep is not empty, perform the following.
+	if (TempHistoryPastStep.stack.length > 0) {
+		// Step 4
+		handleEmptyDocument();
+		// Step 5
+		savePAS(_FROM_PAST_);
+		// Step 6
+		BlankFlags.CONTINUOUS_ACTION = true;
+		// Step 7
+		render();
+	} else {
+		// Step 8
+		BlankFlags.RUNNING = false;
+	}
+}
+
+/*
+	Complete copyBranchText():
+		1. Prepare BAS for action.
+		2. Perform the action on BAS.
+		3. Set RUNNING to false.
+*/
+export function copyBranchText$COMPLETE(): void {
+	// Step 1
+	const selections = toSelections(BeforeActionSelection);
+	// Step 2
+	copyBranchText(selections);
+	// Step 3
+	BlankFlags.RUNNING = false;
+}
+
+/*
+	Complete cut():
+		- This is a custom CAO for "cut" intent.
+
+		1. If not CONTINUOUS_ACTION
+			- call readyTempHistorySteps().
+			- Save current BAS to TempHistoryPastStep.
+		2. Prepare BAS for action.
+		3. Copy first, then backspace
+
+		If TempHistoryPastStep is not empty:
+
+		4. Handle empty document.
+		5. Save current PAS to TempHistoryPastStep.
+		6. Set CONTINUOUS_ACTION to true. (applyBranchText() is a continue-able action.)
+		7. Render, then callback.
+			- Display PAS.
+			- Set RUNNING to false.
+
+		If TempHistoryPastStep is empty:
+
+		8. Set RUNNING to false.
+*/
+export function cut$COMPLETE(): void {
+	// Step 1
+	if (!BlankFlags.CONTINUOUS_ACTION) {
+		readyTempHistorySteps();
+		saveBAS(_FROM_PAST_);
+	}
+	// Step 2
+	const selections = toSelections(BeforeActionSelection);
+	// Step 3
+	copyBranchText(selections);
+	applyBranchText(selections, '', _BACKSPACE_);
+
+	// If TempHistoryPastStep is not empty, perform the following.
+	if (TempHistoryPastStep.stack.length > 0) {
+		// Step 4
+		handleEmptyDocument();
+		// Step 5
+		savePAS(_FROM_PAST_);
+		// Step 6
+		BlankFlags.CONTINUOUS_ACTION = true;
+		// Step 7
+		render();
+	} else {
+		// Step 8
+		BlankFlags.RUNNING = false;
+	}
 }

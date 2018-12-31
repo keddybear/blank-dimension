@@ -10,7 +10,7 @@ import ChainComponent from './chain';
 import renderNode from './nodes/basic';
 
 // Render & Mapping imports
-import { ReactMap, RenderFlags } from '../render';
+import { ReactMap, RenderFlags, AsyncRenderManager } from '../render';
 import { BlankMap } from '../selection';
 
 type NodeProps = { node: Node };
@@ -24,11 +24,13 @@ class NodeComponent extends React.Component<NodeProps, NodeState> {
 		selectRef: Object - default: { current: null }
 		props: NodeProps
 		state: NodeState
+		dirty: boolean
 	*/
 
 	node: Node; // eslint-disable-line
 	chainRef: { current: null | ChainComponent };
 	selectRef: { current: null | React.ElementRef<*> };
+	dirty: boolean;
 
 	constructor(props: NodeProps) {
 		super(props);
@@ -36,6 +38,7 @@ class NodeComponent extends React.Component<NodeProps, NodeState> {
 		this.chainRef = { current: null };
 		this.selectRef = React.createRef();
 		this.state = { update: false };
+		this.dirty = false;
 	}
 
 	componentDidMount() {
@@ -51,7 +54,7 @@ class NodeComponent extends React.Component<NodeProps, NodeState> {
 	}
 
 	shouldComponentUpdate(nextProps: NodeProps, nextState: NodeState): boolean {
-		if (nextState.update !== true) return false;
+		if (!nextState.update || !this.dirty) return false;
 		if (this.node.dirty === RenderFlags.DIRTY_SELF) {
 			this.node.dirty = RenderFlags.CLEAN;
 			return true;
@@ -59,11 +62,18 @@ class NodeComponent extends React.Component<NodeProps, NodeState> {
 			this.node.dirty = RenderFlags.DIRTY_CHILDREN;
 			return true;
 		}
+		// Will not update
+		this.dirty = false;
+		AsyncRenderManager.totalUpdates -= 1;
+		AsyncRenderManager.fire();
 		return false;
 	}
 
 	componentDidUpdate() {
 		this.state.update = false;
+		this.dirty = false;
+		AsyncRenderManager.totalUpdates -= 1;
+		AsyncRenderManager.fire();
 	}
 
 	componentWillUnmount() {
@@ -75,6 +85,8 @@ class NodeComponent extends React.Component<NodeProps, NodeState> {
 		if (this === ReactMap.get(this.node)) ReactMap.delete(this.node);
 		// Set dirty to CLEAN
 		this.node.dirty = RenderFlags.CLEAN;
+		// Decrease ARM totalUpdates by 1 if marked dirty by setState
+		if (this.dirty) AsyncRenderManager.totalUpdates -= 1;
 	}
 
 	render() {

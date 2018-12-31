@@ -577,6 +577,112 @@ class BlankComponentMap {
 
 export const ReactMap = new BlankComponentMap();
 
+let AsyncManagerExists = false;
+class AsynchronousRenderManager {
+	/*
+		AsynchronousRenderManager handles async setState by registering a callback that
+		will fire when all setStates have finished.
+
+		ARM is ready to fire callback when all setStates have finished and RenderStack is
+		empty, and callback has not already been called.
+
+		At the beginning of each render(), ARM is cleared, setting "totalUpdates" to 0
+		and "called" to false.
+	*/
+
+	/*
+		@ attributes
+		totalUpdates: number - default: 0
+		callback: function
+		called: boolean - default: false
+	*/
+	totalUpdates: number;
+	callback: () => void;
+	called: boolean;
+
+	/*
+		@ methods
+		register
+		reset
+		clear
+		fire
+		render
+	*/
+
+	/*
+		constructor
+	*/
+	constructor() {
+		if (AsyncManagerExists === true) {
+			throw new Error('Only one instance of AsynchronousRenderManager can be created.');
+		}
+		AsyncManagerExists = true;
+
+		this.totalUpdates = 0;
+		this.callback = () => {};
+		this.called = false;
+	}
+
+	/*
+		register:
+			- Assign a callback function.
+		@ params
+			fn: function
+	*/
+	register(fn: () => void): void {
+		this.callback = fn;
+	}
+
+	/*
+		reset:
+			- Reset ARM attribites to their initial values, including callback.
+	*/
+	reset(): void {
+		this.totalUpdates = 0;
+		this.callback = () => {};
+		this.called = false;
+	}
+
+	/*
+		clear:
+			- Set totalUpdates to 0 and called to false.
+	*/
+	clear(): void {
+		this.totalUpdates = 0;
+		this.called = false;
+	}
+
+	/*
+		fire:
+			- Set called to true and call the callback, if totalUpdates is zero,
+			  callback is not already called, and RenderStack is empty.
+	*/
+	fire(): void {
+		if (!this.called && this.totalUpdates === 0 && RenderStack.size() === 0) {
+			this.called = true;
+			this.callback();
+		}
+	}
+
+	/*
+		render:
+			- Call setState on a Blank Component, mark it as dirty (not the same as
+			  the "dirty" attribute in Blank Element), and increase totalUpdates by
+			  1.
+		@ params
+			component: React.Component<*>
+	*/
+	render(component: React.Component<*>): void {
+		// $FlowFixMe
+		component.dirty = true; // eslint-disable-line
+		this.totalUpdates += 1;
+		// $FlowFixMe
+		component.setState({ update: true });
+	}
+}
+
+export const AsyncRenderManager = new AsynchronousRenderManager();
+
 /*
 	render:
 		- Iterate through RenderStack and use ReactMap to find each Blank Element's React
@@ -593,8 +699,17 @@ export const ReactMap = new BlankComponentMap();
 				- Node:
 			- If CLEAN, do nothing.
 		- RenderStack must be cleared.
+
+	# IMPORTANT
+		- setState is async, but somehow it becomes sync during testing.
+		- A callback is required for any operation after render().
+			- This callback will be fired in componentDidUpdate when total number of dirty
+			  elements reaches 0.
 */
 export function render(): void {
+	// Ready ARM
+	AsyncRenderManager.clear();
+	// Iterate through RenderStack
 	while (RenderStack.size() > 0) {
 		const el = RenderStack.pop();
 		// Check dirty
@@ -604,11 +719,9 @@ export function render(): void {
 				switch (el.dirty) {
 					case RenderFlags.DIRTY_SELF: {
 						if (instanceOf(el, 'Leaf')) {
-							// $FlowFixMe
-							comp.setState({ update: true });
+							AsyncRenderManager.render(comp);
 						} else if (instanceOf(el, 'Node')) {
-							// $FlowFixMe
-							comp.setState({ update: true });
+							AsyncRenderManager.render(comp);
 						} else {
 							// Clean dirty just in case
 							el.dirty = RenderFlags.CLEAN;
@@ -617,12 +730,12 @@ export function render(): void {
 					}
 					case RenderFlags.DIRTY_CHILDREN: {
 						if (instanceOf(el, 'RootNode')) { // $FlowFixMe
-							if (comp.chainRef.current) { // $FlowFixMe
-								comp.chainRef.current.setState({ update: true });
+							if (comp.chainRef.current) {
+								AsyncRenderManager.render(comp.chainRef.current);
 							}
 						} else if (instanceOf(el, 'Node')) { // $FlowFixMe
-							if (comp.chainRef.current) { // $FlowFixMe
-								comp.chainRef.current.setState({ update: true });
+							if (comp.chainRef.current) {
+								AsyncRenderManager.render(comp.chainRef.current);
 							}
 						} else {
 							// Clean dirty just in case
@@ -632,8 +745,7 @@ export function render(): void {
 					}
 					case RenderFlags.DIRTY: {
 						if (instanceOf(el, 'Node')) {
-							// $FlowFixMe
-							comp.setState({ update: true });
+							AsyncRenderManager.render(comp);
 						} else {
 							// Clean dirty just in case
 							el.dirty = RenderFlags.CLEAN;
@@ -649,4 +761,6 @@ export function render(): void {
 	}
 	// Cleanup - remaining values are undefined
 	RenderStack.clear();
+	// Fire render callback just in case
+	AsyncRenderManager.fire();
 }
