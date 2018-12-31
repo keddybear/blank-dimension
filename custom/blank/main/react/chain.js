@@ -12,7 +12,7 @@ import NodeComponent from './node';
 import LeafComponent from './leaf';
 
 // Render imports
-import { RenderFlags } from '../render';
+import { RenderFlags, AsyncRenderManager } from '../render';
 
 /*
 	renderChain:
@@ -53,14 +53,17 @@ class ChainComponent extends React.Component<ChainProps, ChainState> {
 		parent: Node | null
 		props: ChainProps
 		state: ChainState
+		dirty: boolean
 	*/
 
 	parent: Node | RootNode; // eslint-disable-line
+	dirty: boolean;
 
 	constructor(props: ChainProps) {
 		super(props);
 		this.parent = this.props.parent;
 		this.state = { update: false };
+		this.dirty = false;
 		// Update parent's chainRef
 		this.props.chainRef.current = this;
 	}
@@ -69,16 +72,31 @@ class ChainComponent extends React.Component<ChainProps, ChainState> {
 		// ChainComponent setState is called by render(), not by its parent.
 		// If its parent is DIRTY_CHILDREN, render() will call setState on
 		// the ChainComponent directly.
-		if (nextState.update !== true) return false;
-		if (this.parent.dirty === RenderFlags.DIRTY_CHILDREN) {
+		if (!nextState.update || !this.dirty) return false;
+		if (this.parent.dirty === RenderFlags.DIRTY) {
+			this.parent.dirty = RenderFlags.DIRTY_SELF;
+			return true;
+		} else if (this.parent.dirty === RenderFlags.DIRTY_CHILDREN) {
 			this.parent.dirty = RenderFlags.CLEAN;
 			return true;
 		}
+		// Will not update
+		this.dirty = false;
+		AsyncRenderManager.totalUpdates -= 1;
+		AsyncRenderManager.fire();
 		return false;
 	}
 
 	componentDidUpdate() {
 		this.state.update = false;
+		this.dirty = false;
+		AsyncRenderManager.totalUpdates -= 1;
+		AsyncRenderManager.fire();
+	}
+
+	componentWillUnmount() {
+		// Decrease ARM totalUpdates by 1 if marked dirty by setState
+		if (this.dirty) AsyncRenderManager.totalUpdates -= 1;
 	}
 
 	render() {

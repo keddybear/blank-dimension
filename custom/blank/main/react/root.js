@@ -6,7 +6,7 @@ import * as React from 'react';
 import { RootNode, DocumentRoot } from '../node';
 
 // Render & Mapping imports
-import { ReactMap } from '../render';
+import { ReactMap, RenderFlags } from '../render';
 
 // Blank Component imports (circular dependency)
 import ChainComponent from './chain';
@@ -57,6 +57,8 @@ class RootComponent extends React.Component<RootProps, RootState> {
 	componentWillUnmount(): void {
 		// Update ReactMap
 		ReactMap.delete(this.node);
+		// Set dirty to CLEAN
+		this.node.dirty = RenderFlags.CLEAN;
 	}
 
 	render() {
