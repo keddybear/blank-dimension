@@ -2,7 +2,7 @@
 import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from '../../node';
 import { Leaf, isZeroLeaf, LeafStyles, CaretStyle, applyCaretStyle, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from '../../leaf';
 import { History, BlankHistoryStep } from '../../history';
-import { BeforeActionSelection, PostActionSelection, clearBlankSelection, copyBlankSelection, toSelections } from '../../selection';
+import { BeforeActionSelection, PostActionSelection, clearBlankSelection, copyBlankSelection, toSelections, normalizeBlankSelection } from '../../selection';
 import { instanceOf } from '../../utils';
 import {
 	getPrevLeafChain,
@@ -7131,6 +7131,217 @@ describe('PAS - Post-Action Selection', function() {
 			expect(PostActionSelection.end.leaf).to.equal(sl2);
 			expect(PostActionSelection.end.range[0]).to.equal(0);
 			expect(PostActionSelection.end.range[1]).to.equal(sl2.text.length);
+
+			done();
+		});
+
+	});
+
+	describe('applyLeavesStyle - Extra', function() {
+
+		const n1 = new Node();
+			const l1 = new Leaf({ text: 'Leaf 1' });
+			const l2 = new Leaf({ text: 'Leaf 2', styles: new LeafStyles({ bold: true }) });
+			const l3 = new Leaf({ text: 'Leaf 3' })
+
+		before(function(done) {
+			DocumentRoot.firstChild = null;
+			History.clear(_PAST_STACK_);
+			History.clear(_FUTURE_STACK_);
+			TempHistoryPastStep.clear();
+			TempHistoryFutureStep.clear();
+			clearBlankSelection(BeforeActionSelection);
+			clearBlankSelection(PostActionSelection);
+
+			setParentLink(n1, null);
+			setParentLink(l1, n1);
+				chainLeaf(l2, l1);
+				chainLeaf(l3, l2);
+
+			n1.new = false;
+
+			l1.new = false;
+			l2.new = false;
+			l3.new = false;
+
+			done();
+		});
+
+		it('PAS range should cover the entire Leaf after merging', function(done) {
+			const newStyles = { bold: true };
+
+			BeforeActionSelection.start = { leaf: l1, range: [2, l1.text.length] };
+			BeforeActionSelection.end = { leaf: l3, range: [0, 2] };
+			copyBlankSelection(TempHistoryPastStep.bas, BeforeActionSelection);
+
+			const selections = toSelections(BeforeActionSelection);
+
+			applyLeavesStyle(selections, newStyles);
+
+			let cl = n1.firstChild;
+			expect(cl.text).to.equal('Le');
+			expect(cl.styles.bold).to.be.false;
+			expect(cl.new).to.be.true;
+			cl.new = false;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('af 1Leaf 2Le');
+			expect(cl.styles.bold).to.be.true;
+			expect(cl.new).to.be.true;
+			cl.new = false;
+			const sl = cl;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('af 3');
+			expect(cl.styles.bold).to.be.false;
+			expect(cl.new).to.be.true;
+			cl.new = false;
+			expect(cl.nextLeaf).to.equal(null);
+
+			// PAS
+			normalizeBlankSelection(PostActionSelection);
+			expect(PostActionSelection.start.leaf).to.equal(sl);
+			expect(PostActionSelection.start.range[0]).to.equal(0);
+			expect(PostActionSelection.start.range[1]).to.equal(sl.text.length);
+			expect(PostActionSelection.end.leaf).to.equal(sl);
+			expect(PostActionSelection.end.range[0]).to.equal(0);
+			expect(PostActionSelection.end.range[1]).to.equal(sl.text.length);
+
+			// Save PAS
+			copyBlankSelection(TempHistoryPastStep.pas, PostActionSelection);
+
+			done();
+		});
+
+		it('Apply { bold: false } to last selection', function(done) {
+			readyTempHistorySteps();
+
+			const newStyles = { bold: false };
+
+			copyBlankSelection(BeforeActionSelection, PostActionSelection);
+			copyBlankSelection(TempHistoryPastStep.bas, BeforeActionSelection);
+
+			const selections = toSelections(BeforeActionSelection);
+
+			applyLeavesStyle(selections, newStyles);
+
+			let cl = n1.firstChild;
+			expect(cl.text).to.equal('Leaf 1Leaf 2Leaf 3');
+			expect(cl.styles.bold).to.be.false;
+			expect(cl.new).to.be.true;
+			cl.new = false;
+			const sl = cl;
+			expect(cl.nextLeaf).to.equal(null);
+
+			// PAS
+			normalizeBlankSelection(PostActionSelection);
+			expect(PostActionSelection.start.leaf).to.equal(sl);
+			expect(PostActionSelection.start.range[0]).to.equal(2);
+			expect(PostActionSelection.start.range[1]).to.equal(14);
+			expect(PostActionSelection.end.leaf).to.equal(sl);
+			expect(PostActionSelection.end.range[0]).to.equal(2);
+			expect(PostActionSelection.end.range[1]).to.equal(14);
+
+			// Save PAS
+			copyBlankSelection(TempHistoryPastStep.pas, PostActionSelection);
+
+			done();
+		});
+
+		it('Undo', function(done) {
+			// Undo
+			readyTempHistorySteps();
+			undo();
+
+			let cl = n1.firstChild;
+			expect(cl.text).to.equal('Le');
+			expect(cl.styles.bold).to.be.false;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('af 1Leaf 2Le');
+			expect(cl.styles.bold).to.be.true;
+			const sl = cl;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('af 3');
+			expect(cl.nextLeaf).to.equal(null);
+
+			// PAS
+			expect(PostActionSelection.start.leaf).to.equal(sl);
+			expect(PostActionSelection.start.range[0]).to.equal(0);
+			expect(PostActionSelection.start.range[1]).to.equal(sl.text.length);
+			expect(PostActionSelection.end.leaf).to.equal(sl);
+			expect(PostActionSelection.end.range[0]).to.equal(0);
+			expect(PostActionSelection.end.range[1]).to.equal(sl.text.length);
+
+			done();
+		});
+
+		it('Undo', function(done) {
+			// Undo
+			readyTempHistorySteps();
+			undo();
+
+			let cl = n1.firstChild;
+			expect(cl).to.equal(l1);
+			cl = cl.nextLeaf;
+			expect(cl).to.equal(l2);
+			cl = cl.nextLeaf;
+			expect(cl).to.equal(l3);
+			expect(cl.nextLeaf).to.equal(null);
+
+			// PAS
+			expect(PostActionSelection.start.leaf).to.equal(l1);
+			expect(PostActionSelection.start.range[0]).to.equal(2);
+			expect(PostActionSelection.start.range[1]).to.equal(l1.text.length);
+			expect(PostActionSelection.end.leaf).to.equal(l3);
+			expect(PostActionSelection.end.range[0]).to.equal(0);
+			expect(PostActionSelection.end.range[1]).to.equal(2);
+
+			done();
+		});
+
+		it('Redo', function(done) {
+			// Redo
+			readyTempHistorySteps();
+			redo();
+
+			let cl = n1.firstChild;
+			expect(cl.text).to.equal('Le');
+			expect(cl.styles.bold).to.be.false;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('af 1Leaf 2Le');
+			expect(cl.styles.bold).to.be.true;
+			const sl = cl;
+			cl = cl.nextLeaf;
+			expect(cl.text).to.equal('af 3');
+			expect(cl.nextLeaf).to.equal(null);
+
+			// PAS
+			expect(PostActionSelection.start.leaf).to.equal(sl);
+			expect(PostActionSelection.start.range[0]).to.equal(0);
+			expect(PostActionSelection.start.range[1]).to.equal(sl.text.length);
+			expect(PostActionSelection.end.leaf).to.equal(sl);
+			expect(PostActionSelection.end.range[0]).to.equal(0);
+			expect(PostActionSelection.end.range[1]).to.equal(sl.text.length);
+
+			done();
+		});
+
+		it('Redo', function(done) {
+			// Redo
+			readyTempHistorySteps();
+			redo();
+
+			let cl = n1.firstChild;
+			expect(cl.text).to.equal('Leaf 1Leaf 2Leaf 3');
+			expect(cl.styles.bold).to.be.false;
+			const sl = cl;
+			expect(cl.nextLeaf).to.equal(null);
+
+			// PAS
+			expect(PostActionSelection.start.leaf).to.equal(sl);
+			expect(PostActionSelection.start.range[0]).to.equal(2);
+			expect(PostActionSelection.start.range[1]).to.equal(14);
+			expect(PostActionSelection.end.leaf).to.equal(sl);
+			expect(PostActionSelection.end.range[0]).to.equal(2);
+			expect(PostActionSelection.end.range[1]).to.equal(14);
 
 			done();
 		});

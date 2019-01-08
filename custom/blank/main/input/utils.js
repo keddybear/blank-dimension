@@ -34,6 +34,8 @@ export const BlankContexts = {
 
 // Intents
 export const BlankIntents = {
+	_default: 'default', // Event does not call preventDefault()
+	// Basic
 	insert_char: 'insert_char',
 	replace_text: 'replace_text',
 	del: 'delete',
@@ -43,13 +45,21 @@ export const BlankIntents = {
 	redo: 'redo',
 	copy: 'copy',
 	cut: 'cut',
+	cut_content: 'cut_content',
 	paste: 'paste',
 	paste_content: 'paste_content',
 	paste_plain: 'paste_plain',
 	paste_plain_content: 'paste_plain_content',
+	select_all: 'select_all',
+	// Style
 	bold: 'bold',
 	italic: 'italic',
 	underline: 'underline',
+	// Branch Type
+	bt_paragraph: 'bt_paragraph',
+	bt_olist: 'bt_olist',
+	bt_ulist: 'bt_ulist',
+	// Others
 	indent_list_item: 'indent_list_item',
 	unindent_list_item: 'unindent_list_item',
 	cut_list: 'cut_list' // Change current list item to a paragraph

@@ -2,7 +2,7 @@
 import { Node, NodeStyles, NullNode, NodeChain, NodeType, BranchType, PhantomNode, PhantomChain, DocumentRoot } from './node';
 import { Leaf, isZeroLeaf, isTextLeaf, LeafStyles, CaretStyle, NullLeaf, LeafChain, LeafText, ParentLink, Clipboard } from './leaf';
 import { History, BlankHistoryStep, copyHistoryStep } from './history';
-import { type SelectionObject, BlankSelection, _MANUAL_, copySelectionObject, BeforeActionSelection, PostActionSelection, setPAS, setWindowSelection, copyBlankSelection, toSelections } from './selection';
+import { type SelectionObject, BlankSelection, _MANUAL_, copySelectionObject, BeforeActionSelection, PostActionSelection, setPAS, setWindowSelection, copyBlankSelection, toSelections, normalizeBlankSelection } from './selection';
 import { markBlankElementDirty, render, AsyncRenderManager } from './render';
 import { instanceOf, BlankFlags } from './utils';
 
@@ -74,6 +74,7 @@ import { instanceOf, BlankFlags } from './utils';
 	getNextLeafChain
 	findNextLeafChain
 	getPrevLeafChain
+	getNextLeaf
 	getBranchType
 	getBranchTypeFromArray
 	compareBranchType
@@ -256,6 +257,18 @@ export function getPrevLeafChain(leaf: Leaf): Leaf | null {
 		c = c.nextNode || c.firstChild;
 	}
 	return c;
+}
+
+/*
+	getNextLeaf:
+		- Find the next Leaf. Return null if none found.
+	@ params
+		leaf: Leaf
+	@ return
+		nextLeaf: Leaf | null
+*/
+export function getNextLeaf(leaf: Leaf): Leaf | null {
+	return leaf.nextLeaf || getNextLeafChain(leaf);
 }
 
 /*
@@ -1331,7 +1344,10 @@ export function rechainNode(node: any, fromPast: boolean): void {
 
 		if (rechainPrev && rechainNext) {
 			if (chainedNodes(prevNode, nextNode) === _NOT_CHAINED_) {
-				throw new Error('When rechaining a PhantomChain, it should not replace any existing chain.');
+				// PhantomChain cannot replace any existing chain.
+				// console.warn('When rechaining a PhantomChain, it should not replace any
+				// existing chain.');
+				// This could be caused by unchaining PC in an unchained NC.
 			}
 			// Need to rechain both ends
 			prevNode.nextNode = startRef;
@@ -1339,14 +1355,20 @@ export function rechainNode(node: any, fromPast: boolean): void {
 			// There's no need to unchain a NullNode. Unchaining a PhantomChain handles it.
 		} else if (rechainPrev) {
 			if (prevNode.nextNode !== null) {
-				throw new Error('When rechaining a PhantomChain, it should not replace any existing chain.');
+				// PhantomChain cannot replace any existing chain.
+				// console.warn('When rechaining a PhantomChain, it should not replace any
+				// existing chain.');
+				// This could be caused by unchaining PC in an unchained NC.
 			}
 			// Need to rechain prevNode
 			prevNode.nextNode = startRef;
 			// There's no need to unchain a NullNode. Unchaining a PhantomChain handles it.
 		} else if (rechainNext) {
 			if (nextNode.prevNode !== null) {
-				throw new Error('When rechaining a PhantomChain, it should not replace any existing chain.');
+				// PhantomChain cannot replace any existing chain.
+				// console.warn('When rechaining a PhantomChain, it should not replace any
+				// existing chain.');
+				// This could be caused by unchaining PC in an unchained NC.
 			}
 			// Need to rechain nextNode
 			nextNode.prevNode = endRef;
@@ -1366,11 +1388,12 @@ export function rechainNode(node: any, fromPast: boolean): void {
 			removeNode(pc.startNode.parent, null, !fromPast);
 		} else { // $FlowFixMe
 			if (pc.startNode.prevNode === null) { // $FlowFixMe
-				setFirstChild(pc.startNode.parent, pc.endNode.nextNode);
-			} else { // $FlowFixMe
+				setFirstChild(pc.startNode.parent, pc.endNode.nextNode); // $FlowFixMe
+			} else if (pc.startNode.prevNode.nextNode === pc.startNode.ref) { // $FlowFixMe
 				pc.startNode.prevNode.nextNode = pc.endNode.nextNode;
 			} // $FlowFixMe
-			if (pc.endNode.nextNode !== null) { // $FlowFixMe
+			if (pc.endNode.nextNode !== null && pc.endNode.nextNode.prevNode === pc.endNode.ref) {
+				// $FlowFixMe
 				pc.endNode.nextNode.prevNode = pc.startNode.prevNode;
 			}
 		}
@@ -2232,9 +2255,10 @@ export function consume(leaf: Leaf, up: boolean = _TRAVERSE_UP_): boolean {
 				// pas
 				oi = 0;
 			} else if (!isZeroLeaf(nextLeaf)) {
-				l.text = `${l.text}${nextLeaf.text}`;
 				// pas
 				oi = l.text.length;
+				// then consume
+				l.text = `${l.text}${nextLeaf.text}`;
 			}
 			// Get nextLeaf.nextLeaf
 			const nextNextLeaf = nextLeaf.nextLeaf;
@@ -2609,6 +2633,8 @@ export function copyNodeChain(
 	autoMergeLeaf
 	autoMergeDirtyLeaves
 	mergeLeafTexts
+	sameLeafStylesDirect
+	getLeafStylesState
 */
 
 /*
@@ -2711,6 +2737,64 @@ export function mergeLeafTexts(leafText: LeafText, targetLeafText: LeafText): bo
 	return true;
 }
 
+/*
+	sameLeafStylesDirect:
+		- Used in applyLeafStyle to make comparison faster.
+		- It compares a LeafStyles with an object.
+		- 100% Faster! (https://jsperf.com/create-object-vs-no-object)
+	@ params
+		styles: LeafStyles object
+		newStyles: Object
+	@ return
+		Boolean
+*/
+function sameLeafStylesDirect(styles: LeafStyles, newStyles: Object = {}): boolean {
+	if (newStyles.bold !== undefined && newStyles.bold !== styles.bold) return false;
+	if (newStyles.italic !== undefined && newStyles.italic !== styles.italic) return false;
+	if (newStyles.underline !== undefined && newStyles.underline !== styles.underline) return false;
+	return true;
+}
+
+/*
+	getLeafStylesState:
+		- Check if all Leaves in current BAS have the same target styles.
+		- Return the first Leaf whose styles differ, or null if none, along with a
+		  "disabled" key that indicates if LeafStyles should be applied.
+		  	- If all Leaves are non-text, disabled would be true.
+		- This is used to toggle "bold", "italic", "underline" in Intent. If all have
+		  the same styles, set those styles to false.
+		- Skip non-text Leaves.
+	@ params
+		newStyles: Object
+	@ return
+		result: Leaf | null
+*/
+type StylesState = { leaf: Leaf | null, disabled: boolean };
+export function getLeafStylesState(newStyles: Object = {}): StylesState {
+	if (BeforeActionSelection.start === null || BeforeActionSelection.end === null) {
+		return { leaf: null, disabled: true };
+	}
+
+	// Start traversing
+	let firstL = null;
+	let allNonText = true;
+	let currentL = BeforeActionSelection.start.leaf;
+	while (currentL !== null) {
+		if (isTextLeaf(currentL)) {
+			allNonText = false;
+			if (!sameLeafStylesDirect(currentL.styles, newStyles)) {
+				firstL = currentL;
+				break;
+			}
+		}
+		// Break when reaching the end // $FlowFixMe
+		if (currentL === BeforeActionSelection.end.leaf) break;
+		currentL = getNextLeaf(currentL);
+	}
+
+	return { leaf: firstL, disabled: allNonText };
+}
+
 //= Node Action Ops
 
 /*
@@ -2742,10 +2826,10 @@ export function mergeLeafTexts(leafText: LeafText, targetLeafText: LeafText): bo
 		5. Declare a "middle" variable to store new branches with the new BranchType.
 			- Create a new Branch for "middle".
 		6. Copy NodeStyles of the current LeafChain for the new Branch's last Node.
-		7. Check if current LeafChain is the last in selections.
-			- If not last, find the next LeafChain. Switch current LeafChain onto the new
-			  Branch's last Node and set the Node as GrowPoint.
-			- Else, done. Go to step 10.
+		7. Switch current LeafChain onto the new Branch's last Node and set the Node as
+		   GrowPoint.
+			- If current LeafChain is the last LeafChain, skip to step 10.
+			- Else, find the next LeafChain.
 		8. Starting from the new LeafChain's parent, check if its prevNode is the GrowPoint.
 			- If it's the GrowPoint, no need to declare a new PhantomNode (no need to rechain).
 			- If it's not, declare a new PhantomNode (no need to rechain).
@@ -2768,7 +2852,7 @@ export function mergeLeafTexts(leafText: LeafText, targetLeafText: LeafText): bo
 
 		# Post-Action Selection (PAS)
 		- Since applyBranchType() does not remove or create new Leaves, anchorNode and focusNode
-		  are the same as firstLC and lastLC with the same offset.
+		  are the same as firstL and lastL with the same offset.
 	@ params
 		selections: Array<SelectionObject>[2]
 			- first and last are expected to be the first Leaves of their LeafChains.
@@ -2796,13 +2880,17 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 	// If no LeafChain with different BT is found, do nothing.
 	if (index < 0) return;
 	// Step 3
-	const EntryPoint = currentBT.branch[index].ref;
+	let EntryPoint = currentBT.branch[index].ref;
 	// Step 4 - shatter() // $FlowFixMe
 	const { first: before, second } = shatter(currentLC, EntryPoint);
 	if (before !== null) {
 		// If first tree is not null, first tree is the EntryPoint. Chain the second tree
 		// between the first and first's nextNode, using chainNodeChainBetween().
 		chainNodeChainBetween(second, second, before, before.nextNode);
+		// Set second as the EntryPoint
+		EntryPoint = second;
+		// And pretend second is old
+		EntryPoint.new = false;
 	}
 	// Step 5
 	const { first: middle, last } = createNewBranchAt(type, index);
@@ -2815,19 +2903,26 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 	// If growing on the "middle", middleEnd is the endNode of the "middle" chain, and
 	// the middleNext is what it will be chained to.
 	let middleEnd = middle; // $FlowFixMe
-	let middleNext = null;
+	let middleNext = EntryPoint.nextNode;
 	if (currentLC !== lastLC) { // $FlowFixMe
 		nextLC = getNextLeafChain(currentLC); // No need for findNextLeafChain()
-		// Remeber current parent // $FlowFixMe
-		const currentParent = currentLC.parent;
-		// Switch LeafChain
-		// (setParentLink) Safe to use: last is new and has no child, currentLC detached // $FlowFixMe
-		switchParentNode(currentLC, last);
-		// Remove old parent and stop at EntryPoint // $FlowFixMe
-		removeNode(currentParent, EntryPoint);
-		// Set GrowPoint
-		GrowPoint = last;
 	}
+	// Remeber current parent // $FlowFixMe
+	const currentParent = currentLC.parent;
+	// Switch LeafChain
+	// (setParentLink) Safe to use: last is new and has no child, currentLC detached // $FlowFixMe
+	switchParentNode(currentLC, last);
+	// Remove old parent and stop at EntryPoint // $FlowFixMe
+	removeNode(currentParent, EntryPoint);
+	// After removal, if EntryPoint still has firstChild and currentLC is lastLC, middleNext
+	// isEntryPoint itself.
+	if (currentLC === lastLC && // $FlowFixMe
+		EntryPoint.firstChild !== null &&
+		EntryPoint.firstChild.parent === EntryPoint) {
+		middleNext = EntryPoint;
+	}
+	// Set GrowPoint
+	GrowPoint = last;
 	// Step 8
 	currentLC = nextLC;
 	let lastPhantom = null;
@@ -2878,9 +2973,9 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 				currentNode.nextNode = null;
 				// Unchain PhantomChain after currentNode is updated
 				unchainNode(pc, _PAST_STACK_);
-				// Check if needed to remove old parent
+				// Check if needed to remove old parent (Never remove EntryPoint)
 				if (tempPrev === null && tempNext === null) { // $FlowFixMe
-					removeNode(tempParent);
+					removeNode(tempParent, EntryPoint);
 				} else {
 					if (tempPrev === null) { // $FlowFixMe
 						setFirstChild(tempParent, tempNext);
@@ -2914,9 +3009,9 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 			currentNode.nextNode = null;
 			// Unchain PhantomChain after currentNode is updated
 			unchainNode(pc, _PAST_STACK_);
-			// Check if needed to remove old parent
+			// Check if needed to remove old parent (Never remove EntryPoint)
 			if (tempPrev === null && tempNext === null) { // $FlowFixMe
-				removeNode(tempParent);
+				removeNode(tempParent, EntryPoint);
 			} else {
 				if (tempPrev === null) { // $FlowFixMe
 					setFirstChild(tempParent, tempNext);
@@ -2927,19 +3022,14 @@ export function applyBranchType(selections: Array<SelectionObject>, type: Array<
 					tempNext.prevNode = tempPrev;
 				}
 			}
-			// If growing on the "middle", update middleEnd and middleNext.
-			// middleNext is the last Node's original next Node, if its new parent
-			// is the same as that next Node's parent. Otherwise, middleNext is null.
-			if (middle === last) {
-				middleEnd = currentNode; // $FlowFixMe
-				if (tempNext !== null && currentNode.parent === tempNext.parent) {
-					middleNext = tempNext;
-				} else {
-					middleNext = null;
-				}
-			} else {
+			// If growing on the "middle", update middleEnd.
+			if (middle === last) middleEnd = currentNode;
+			// Update middleNext // $FlowFixMe
+			if (EntryPoint.firstChild !== null && EntryPoint.firstChild.parent === EntryPoint) {
 				// If not growing on the "middle", middleNext is EntryPoint's current
-				// nextNode // $FlowFixMe
+				// nextNode or EntryPoint itself if it has firstChild
+				middleNext = EntryPoint;
+			} else { // $FlowFixMe
 				middleNext = EntryPoint.nextNode;
 			}
 			// Done
@@ -3120,6 +3210,7 @@ export function copyFromClipboard(stopAtNonText: boolean = false): Object | null
 		  with a dirty zeroLeaf.
 		- It does not handle "Delete" or "Backspace". removeAndAppend() handles them.
 		- It expects CaretStyle to be the same as the current Leaf's LeafStyles.
+		- Set CONTINOUS_ACTION to true.
 
 		# PAS
 		- If Leaf is not removed, PAS is zero-width and stays in the same Leaf. Its new
@@ -3159,6 +3250,8 @@ export function applyLeafText(leaf: Leaf, range: Array<number>, replacement: str
 		setPAS({ leaf: zl, range: [0, 0] }, { leaf: zl, range: [0, 0] });
 		// Auto-merge
 		autoMergeDirtyLeaves();
+		// applyLeafText is a continous action
+		BlankFlags.CONTINUOUS_ACTION = true;
 		// Done
 		return;
 	}
@@ -3199,6 +3292,8 @@ export function applyLeafText(leaf: Leaf, range: Array<number>, replacement: str
 		// Mark dirty for rendering
 		markBlankElementDirty(lt);
 	}
+	// applyLeafText is a continous action
+	BlankFlags.CONTINUOUS_ACTION = true;
 
 	// PAS
 	setPAS({
@@ -4150,7 +4245,7 @@ export function applyBranchText(
 		rootBT = true;
 	}
 
-	if (nonEmptyStringOrLeafChain || (zeroLeaf && !rootBT) || sameNodeType) {
+	if (nonEmptyStringOrLeafChain || (isNodeChain && ((zeroLeaf && !rootBT) || sameNodeType))) {
 		appendAndGrow(selections, replacement);
 	} else if (((zeroLeaf && rootBT) || !sameNodeType) && isNodeChain) { // $FlowFixMe
 		shatterAndInsert(selections, replacement);
@@ -4210,12 +4305,12 @@ export function applyLeafStyle(
 	// If range width is 0, do nothing. applyCaretStyle() handles this.
 	if (r[0] === r[1] && !isZeroLeaf(leaf)) return;
 
+	// If applying same styles, do nothing.
+	if (sameLeafStylesDirect(leaf.styles, newStyles)) return;
+
 	// Step 3
 	const { text, styles, prevLeaf, nextLeaf, parent } = leaf;
-	const { ...oldStyles } = styles;
-	const newLeafStyles = new LeafStyles({ ...oldStyles, ...newStyles });
-	// If applying same styles, do nothing.
-	if (styles.hash === newLeafStyles.hash) return;
+	const newLeafStyles = new LeafStyles({ ...styles, ...newStyles });
 
 	// Step 4
 	const middle = new Leaf({
@@ -4251,11 +4346,11 @@ export function applyLeafStyle(
 
 	const before = new Leaf({
 		text: text.substring(0, r[0]),
-		styles: new LeafStyles({ ...oldStyles })
+		styles: new LeafStyles({ ...styles })
 	});
 	const after = new Leaf({
 		text: text.substring(r[1], text.length),
-		styles: new LeafStyles({ ...oldStyles })
+		styles: new LeafStyles({ ...styles })
 	});
 
 	if (!isZeroLeaf(before)) {
@@ -4305,6 +4400,8 @@ export function applyLeafStyle(
 		- Apply new styles to a selection of Leaves.
 		- Skip autoMergeLeaf() on dirty Leaves already consumed.
 			- Delete consumed attribute on dirty Leaves after autoMergeLeaf().
+		- Take an additional argument "start" to indicate which Leaf it should start applying
+		  the new style. Selection remains the same.
 
 		# PAS
 		- PAS is the same as selections. Then rely on applyLeafStyle() and autoMergeLeaves()
@@ -4315,7 +4412,11 @@ export function applyLeafStyle(
 			- range: Array<number>
 		newStyles: Object (LeafStyles props)
 */
-export function applyLeavesStyle(selections: Array<SelectionObject>, newStyles: Object): void {
+export function applyLeavesStyle(
+	selections: Array<SelectionObject>,
+	newStyles: Object,
+	start: Leaf | null = null
+): void {
 	if (selections.length !== 2) return;
 	// Iterate through Leaves in selections, and call applyLeafStyle on each.
 	const { leaf: startLeaf, range: startRange } = selections[0];
@@ -4325,7 +4426,7 @@ export function applyLeavesStyle(selections: Array<SelectionObject>, newStyles: 
 	setPAS(copySelectionObject(selections[0]), copySelectionObject(selections[1]));
 
 	let currentL = null;
-	let nextL = startLeaf;
+	let nextL = start || startLeaf;
 	let exit = false;
 	while (nextL !== null) {
 		// Update currentL
@@ -4447,10 +4548,14 @@ export function redo(): void {
 /*
 	defaultRenderCallback:
 		- This is the default callback after render() is finished.
+		- Set BAS from PAS.
+			- Copy BAS start and end to LSS.
 		- Set window selection from PAS.
 		- Set RUNNING to false.
 */
 function defaultRenderCallback(): void {
+	normalizeBlankSelection(PostActionSelection);
+	copyBlankSelection(BeforeActionSelection, PostActionSelection);
 	setWindowSelection(PostActionSelection);
 	BlankFlags.RUNNING = false;
 }
@@ -4488,13 +4593,18 @@ export function splitSelectionByNonText(selection: BlankSelection): Array<BlankS
 	const { start, end } = selection;
 	if (start === null || end === null) return splits;
 
-	let currentL = start.leaf;
+	// $FlowFixMe
+	const startL = start.leaf.parent.firstChild;
+	// $FlowFixMe
+	const endL = end.leaf.parent.firstChild;
+
+	let currentL = startL;
 	let nextL = null;
 	let currentS = null;
 	let currentE = null;
 	while (currentL !== null) {
 		// Get next LeafChain
-		nextL = currentL === end.leaf ? null : getNextLeafChain(currentL);
+		nextL = currentL === endL ? null : getNextLeafChain(currentL);
 		// If current Leaf is text Leaf, assign it to currentS and/or currentE
 		if (isTextLeaf(currentL)) {
 			// Assign current Leaf to currentS if it has no value
@@ -4606,7 +4716,7 @@ export function redo$COMPLETE(): void {
 
 		8. Set RUNNING to false.
 */
-export function applyLeavesStyle$COMPLETE(newStyles: Object): void {
+export function applyLeavesStyle$COMPLETE(newStyles: Object, start: Leaf | null = null): void {
 	// Step 1
 	if (!BlankFlags.CONTINUOUS_ACTION) {
 		readyTempHistorySteps();
@@ -4615,7 +4725,7 @@ export function applyLeavesStyle$COMPLETE(newStyles: Object): void {
 	// Step 2
 	const selections = toSelections(BeforeActionSelection);
 	// Step 3
-	applyLeavesStyle(selections, newStyles);
+	applyLeavesStyle(selections, newStyles, start);
 
 	// If TempHistoryPastStep is not empty, perform the following.
 	if (TempHistoryPastStep.stack.length > 0) {
@@ -4752,14 +4862,13 @@ export function applyBranchType$COMPLETE(type: Array<number>): void {
 
 		4. Handle empty document.
 		5. Save current PAS to TempHistoryPastStep.
-		6. Set CONTINUOUS_ACTION to true. (applyBranchText() is a continue-able action.)
-		7. Render, then callback.
+		6. Render, then callback.
 			- Display PAS.
 			- Set RUNNING to false.
 
 		If TempHistoryPastStep is empty:
 
-		8. Set RUNNING to false.
+		7. Set RUNNING to false.
 */
 export const _PASTE_FROM_CLIPBOARD_ = 4; // eslint-disable-line
 export function applyBranchText$COMPLETE(
@@ -4767,9 +4876,11 @@ export function applyBranchText$COMPLETE(
 	flag: number | null = null
 ): void {
 	// Step 1
-	if (!BlankFlags.CONTINUOUS_ACTION) {
+	if (!BlankFlags.CONTINUOUS_ACTION || flag === _NEWLINE_) {
 		readyTempHistorySteps();
 		saveBAS(_FROM_PAST_);
+		// Only applyLeafText is continuable. Flag will be set there.
+		BlankFlags.CONTINUOUS_ACTION = false;
 	}
 	// Step 2
 	const selections = toSelections(BeforeActionSelection);
@@ -4811,11 +4922,9 @@ export function applyBranchText$COMPLETE(
 		// Step 5
 		savePAS(_FROM_PAST_);
 		// Step 6
-		BlankFlags.CONTINUOUS_ACTION = true;
-		// Step 7
 		render();
 	} else {
-		// Step 8
+		// Step 7
 		BlankFlags.RUNNING = false;
 	}
 }
@@ -4849,7 +4958,7 @@ export function copyBranchText$COMPLETE(): void {
 
 		4. Handle empty document.
 		5. Save current PAS to TempHistoryPastStep.
-		6. Set CONTINUOUS_ACTION to true. (applyBranchText() is a continue-able action.)
+		6. Set CONTINUOUS_ACTION to false.
 		7. Render, then callback.
 			- Display PAS.
 			- Set RUNNING to false.
@@ -4877,7 +4986,7 @@ export function cut$COMPLETE(): void {
 		// Step 5
 		savePAS(_FROM_PAST_);
 		// Step 6
-		BlankFlags.CONTINUOUS_ACTION = true;
+		BlankFlags.CONTINUOUS_ACTION = false;
 		// Step 7
 		render();
 	} else {

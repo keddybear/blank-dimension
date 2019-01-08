@@ -358,13 +358,45 @@ export function toSelections(selection: BlankSelection): Array<SelectionObject> 
 }
 
 /*
+	normalizeBlankSelection:
+		- If start and end have the same Leaf, normalize their ranges by setting them
+		  both to [min, max].
+		- If start and end have different Leaves, set start.range[1] to its text length
+		  and set end.range[0] to 0.
+	@ params
+		selection: BlankSelection
+*/
+export function normalizeBlankSelection(selection: BlankSelection): void {
+	const s = selection;
+	if (s.start === null || s.end === null) return;
+	if (s.start.leaf === s.end.leaf) {
+		// $FlowFixMe
+		const min = Math.min(s.start.range[0], s.start.range[1], s.end.range[0], s.end.range[1]);
+		// $FlowFixMe
+		const max = Math.max(s.start.range[0], s.start.range[1], s.end.range[0], s.end.range[1]);
+		// $FlowFixMe
+		s.start.range[0] = min;
+		// $FlowFixMe
+		s.start.range[1] = max;
+		// $FlowFixMe
+		s.end.range[0] = min;
+		// $FlowFixMe
+		s.end.range[1] = max;
+	} else {
+		// $FlowFixMe
+		s.start.range[1] = s.start.leaf.text.length;
+		// $FlowFixMe
+		s.end.range[0] = 0;
+	}
+}
+
+/*
 	setWindowSelection:
 		- Update native selection from BlankSelection.
 		- Do nothing if BlankSelection is invalid or no corresponding DOM Element
 		  is found.
-		- Do nothing is either selected Leaf is non-text
-		- Set SELECTION_FROM_BS to true, so onSelectionChangeHandler() won't create
-		  a new BlankSelection.
+		- Do nothing is either selected Leaf is non-text.
+		- Set SELECTION_FROM_BS to true.
 	@ params
 		selection: BlankSelection
 */
@@ -414,14 +446,18 @@ export function setWindowSelection(selection: BlankSelection) {
 	}
 
 	if (anchorNode !== null && focusNode !== null) {
+		// Set SELECTION_FROM_BS to true
+		BlankFlags.SELECTION_FROM_BS = true;
 		// Get selection
 		const sel = window.getSelection();
-		// Clear selection
-		if (sel) {
+		// Clear selection, also set SELECTION_CLEARED_BY_BS to true
+		if (sel && sel.rangeCount > 0) {
 			if (sel.removeAllRanges) {
 				sel.removeAllRanges();
+				BlankFlags.SELECTION_CLEARED_BY_BS = true;
 			} else if (sel.empty) {
 				sel.empty();
+				BlankFlags.SELECTION_CLEARED_BY_BS = true;
 			}
 		}
 		// Create new range from BlankSelection
@@ -432,32 +468,23 @@ export function setWindowSelection(selection: BlankSelection) {
 		newRange.setEnd(focusNode, focusOffset);
 		sel.addRange(newRange);
 	}
-	// Set SELECTION_FROM_BS to true
-	BlankFlags.SELECTION_FROM_BS = true;
 }
 
 /*
 	onSelectionChangeHandler:
-		- Called in "selectionchange" event, it will create a new BlankSelection object
-		  to be copied to BeforeActionSelection (BAS).
-		  	- If the selection change is from PAS (SELECTION_FROM_BS is true), BAS
-		  	  will simply copy from PAS. Then set SELECTION_FROM_BS to false.
-		- If BlankEditor is currently running a task (RUNNING is true), do nothing,
-		  unless SELECTION_FROM_BS is true.
-		- Set CONTINUOUS_ACTION to false, if native selection is not from PAS.
-		- Update CaretStyle, if BAS is zero-width.
+		- Set BAS from current window selection, called in "selectionchange" event.
+			- Also set CONTINUOUS_ACTION to false and update CaretStyle if selection is
+			  zero-width.
+		- If debounced, it becomes async, so it needs to set RUNNNING to false at the end.
+		- It should not run if RUNNING is true, which is checked in its event handler, not
+		  here.
 */
 export function onSelectionChangeHandler(): void {
-	if (BlankFlags.SELECTION_FROM_BS) {
-		copyBlankSelection(BeforeActionSelection, PostActionSelection);
-		BlankFlags.SELECTION_FROM_BS = false;
-	} else if (!BlankFlags.RUNNING) {
-		const s = new BlankSelection();
-		copyBlankSelection(BeforeActionSelection, s);
-		BlankFlags.CONTINUOUS_ACTION = false;
-		if (isZeroWidth(BeforeActionSelection)) {
-			// $FlowFixMe
-			applyCaretStyle(BeforeActionSelection.start.leaf.styles);
-		}
+	const s = new BlankSelection();
+	copyBlankSelection(BeforeActionSelection, s);
+	BlankFlags.CONTINUOUS_ACTION = false;
+	if (isZeroWidth(BeforeActionSelection)) {
+		// $FlowFixMe
+		applyCaretStyle(BeforeActionSelection.start.leaf.styles);
 	}
 }

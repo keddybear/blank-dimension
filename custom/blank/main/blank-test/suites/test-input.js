@@ -2,6 +2,7 @@
 import Context from '../../input/context';
 import Keyboard from '../../input/keyboard';
 import { BlankIntents, BlankContexts } from '../../input/utils';
+import { COMPOSITION$keydown } from '../../input/helper';
 import { expect } from 'chai';
 
 // Contexts
@@ -9,6 +10,7 @@ const { COMPOSITION } = BlankContexts;
 
 // Intents
 const {
+	_default,
 	insert_char,
 	replace_text,
 	del,
@@ -48,7 +50,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(insert_char);
 
 			done();
@@ -65,7 +67,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(insert_char);
 
 			done();
@@ -82,19 +84,8 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal('');
-
-			done();
-		});
-
-	});
-
-	describe('replace_text', function() {
-
-		it('Issue replace_text command', function(done) {
-			const intent = Context.getProcessor().getIntent('replace_text');
-			expect(intent).to.equal(replace_text);
 
 			done();
 		});
@@ -114,7 +105,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(del);
 
 			done();
@@ -131,7 +122,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal('');
 
 			done();
@@ -152,7 +143,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(backspace);
 
 			done();
@@ -169,7 +160,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal('');
 
 			done();
@@ -190,7 +181,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(newline);
 
 			done();
@@ -207,7 +198,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal('');
 
 			done();
@@ -228,7 +219,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(undo);
 
 			done();
@@ -249,7 +240,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(redo);
 
 			done();
@@ -270,7 +261,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(copy);
 
 			done();
@@ -291,8 +282,8 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
-			expect(intent).to.equal(paste);
+			const intent = COMPOSITION$keydown();
+			expect(intent).to.equal(_default);
 
 			done();
 		});
@@ -312,7 +303,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(cut);
 
 			done();
@@ -333,7 +324,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(bold);
 
 			done();
@@ -354,7 +345,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(italic);
 
 			done();
@@ -375,7 +366,7 @@ describe('Mock input and expect intent', function() {
 			};
 
 			Keyboard.press(event);
-			const intent = Context.getProcessor().getIntent();
+			const intent = COMPOSITION$keydown();
 			expect(intent).to.equal(underline);
 
 			done();

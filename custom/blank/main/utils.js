@@ -6,17 +6,26 @@
 export const BlankFlags = {
 	/*
 		RUNNING:
-			- If true, ignore all user interaction by disabling all event handlers.
-			- Set to true by global event handler.
-			- Set to false at the end of an Action or Intent if there's no Action.
+			- If true, ignore all user interaction by disabling all event handlers. No more
+			  than one task can be running at the same time.
+			- Set to true in event handlers when an async is about to run.
+			- Set to false at the end of that async task.
 	*/
 	RUNNING: false,
 	/*
 		SELECTION_FROM_BS:
-			- If true, there's no need to create a new BlankSelection in onSelectionChangeHandler().
-			- Set by restoring native selection in setWindowSelectionFromPAS().
+			- Set to true at the end of setWindowSelectionFromPAS().
+			- Set to false in selectionchange event handler. It prevents creating the same
+			  BAS from the current window selection, because BAS is already set from PAS
+			  before setWindowSelectionFromPAS().
+				- Also retain CONTINUOUS_ACTION.
 	*/
 	SELECTION_FROM_BS: false,
+	/*
+		SELECTION_CLEARED_BY_BS:
+			- removeAllRanges() also fires selectionchange.
+	*/
+	SELECTION_CLEARED_BY_BS: false,
 	/*
 		CONTINUOUS_ACTION:
 			- If true, there's no need to call readyTempHistorySteps() in Complete Action Ops.

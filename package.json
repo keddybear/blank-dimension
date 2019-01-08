@@ -14,7 +14,7 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "flow": "flow",
     "ui-test": "mocha --require ignore-styles --require babel-core/register --require babel-polyfill custom/blank/main/ui-test/suites/test-render.js",
-    "blank-test": "mocha --require babel-core/register --require babel-polyfill custom/blank/main/blank-test/suites/test-input.js",
+    "blank-test": "mocha --require babel-core/register --require babel-polyfill custom/blank/main/blank-test/suites/test-leaf.js",
     "core-test": "mocha --require babel-core/register --require babel-polyfill custom/blank/main/blank-test/suites/&& mocha --require ignore-styles --require babel-core/register --require babel-polyfill custom/blank/main/ui-test/suites/"
   },
   "author": "Dikai Xiong",

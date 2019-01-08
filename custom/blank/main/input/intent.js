@@ -5,7 +5,9 @@ import { BlankFlags } from '../utils';
 import Keyboard from './keyboard';
 
 // CAO
+import { NodeTypes } from '../node';
 import {
+	getLeafStylesState,
 	undo$COMPLETE,
 	redo$COMPLETE,
 	applyLeavesStyle$COMPLETE,
@@ -20,6 +22,9 @@ import {
 	_PASTE_FROM_CLIPBOARD_
 } from '../integration';
 
+// Node Types
+const { PARAGRAPH, ORDERED_LIST, UNORDERED_LIST, LIST_ITEM } = NodeTypes;
+
 // Intents
 const {
 	insert_char,
@@ -33,11 +38,15 @@ const {
 	paste,
 	paste_content,
 	paste_plain, // TODO
-	paste_plain_content, //TODO
+	paste_plain_content, // TODO
 	cut,
 	bold,
 	italic,
 	underline,
+	select_all,
+	bt_paragraph,
+	bt_olist,
+	bt_ulist,
 	indent_list_item, // TODO
 	unindent_list_item, // TODO
 	cut_list // TODO
@@ -58,6 +67,7 @@ const defaultHandler = () => {
 */
 export default function dispatchIntent(intent: string, ...args: Array<any>): void {
 	switch (intent) {
+		// Basic
 		case insert_char: {
 			applyBranchText$COMPLETE(Keyboard.character);
 			break;
@@ -93,10 +103,9 @@ export default function dispatchIntent(intent: string, ...args: Array<any>): voi
 			break;
 		}
 		case paste: {
-			BlankFlags.RUNNING = false;
-			// Fire paste event to native clipboard data.
-			// Intent "paste_content" will handle actual pasting of data.
-			if (document && document.execCommand) document.execCommand('paste');
+			// For security reason, browsers won't allow us to trigger paste event
+			// manually, so we do not call preventDefault() on keydown and let paste
+			// event handle it.
 			break;
 		}
 		case paste_content: {
@@ -111,20 +120,62 @@ export default function dispatchIntent(intent: string, ...args: Array<any>): voi
 		}
 		case cut: {
 			cut$COMPLETE();
+			// Clear native clipboard data
+			if (document && document.execCommand) document.execCommand('copy');
 			break;
 		}
-		case bold: {
-			applyLeavesStyle$COMPLETE({ bold: true });
+		case select_all: {
+			// Do not call preventDefault() on keydown.
 			break;
 		}
-		case italic: {
-			applyLeavesStyle$COMPLETE({ italic: true });
+		// Leaf Style
+		case bold: { // toggle bold
+			const state = getLeafStylesState({ bold: true });
+			if (state.leaf === null) {
+				if (!state.disabled) {
+					applyLeavesStyle$COMPLETE({ bold: false });
+				}
+			} else {
+				applyLeavesStyle$COMPLETE({ bold: true });
+			}
 			break;
 		}
-		case underline: {
-			applyLeavesStyle$COMPLETE({ underline: true });
+		case italic: { // toggle italic
+			const state = getLeafStylesState({ italic: true });
+			if (state.leaf === null) {
+				if (!state.disabled) {
+					applyLeavesStyle$COMPLETE({ italic: false });
+				}
+			} else {
+				applyLeavesStyle$COMPLETE({ italic: true });
+			}
 			break;
 		}
+		case underline: { // toggle underline
+			const state = getLeafStylesState({ underline: true });
+			if (state.leaf === null) {
+				if (!state.disabled) {
+					applyLeavesStyle$COMPLETE({ underline: false });
+				}
+			} else {
+				applyLeavesStyle$COMPLETE({ underline: true });
+			}
+			break;
+		}
+		// Branch Type
+		case bt_paragraph: {
+			applyBranchType$COMPLETE([PARAGRAPH]);
+			break;
+		}
+		case bt_olist: {
+			applyBranchType$COMPLETE([ORDERED_LIST, LIST_ITEM]);
+			break;
+		}
+		case bt_ulist: {
+			applyBranchType$COMPLETE([UNORDERED_LIST, LIST_ITEM]);
+			break;
+		}
+		// Lastly
 		default: {
 			defaultHandler();
 			break;

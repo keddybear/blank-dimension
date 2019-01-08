@@ -8,7 +8,8 @@ const outputDir = 'dist';
 const webpackPlugins = [
 	new CleanWebpackPlugin([outputDir]),
 	new HtmlWebpackPlugin({
-		template: './public/index.html',
+		// template: './public/index.html',
+		template: './custom/blank/index.html',
 		favicon: './public/favicon.ico'
 	})
 ];
@@ -26,7 +27,8 @@ webpackPlugins.push(new CompressionPlugin({
 }));
 
 module.exports = {
-	entry: ['babel-polyfill', './src/client/index.js'],
+	// entry: ['babel-polyfill', './src/client/index.js'],
+	entry: ['babel-polyfill', './custom/blank/demo.js'],
 	output: {
 		path: path.join(__dirname, outputDir),
 		filename: '[name].bundle.js',
