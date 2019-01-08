@@ -3333,6 +3333,736 @@ describe('Node Action Ops', function() {
 
 		});
 
+		describe('Apply BT to a single Leaf', function() {
+			const l1 = new Leaf({ text: 'l1' });
+			const l2 = new Leaf({ text: 'l2' });
+
+			const n1 = new Node({ nodeType: 0 });
+			const n2 = new Node({ nodeType: 0 });
+
+			/*
+				(0)---<l1>
+		        |
+		        (0)---<l2>
+		    */
+		    before(function(done) {
+				DocumentRoot.firstChild = null;
+				History.clear(_PAST_STACK_);
+				History.clear(_FUTURE_STACK_);
+				TempHistoryPastStep.clear();
+				TempHistoryFutureStep.clear();
+				
+				setParentLink(n1, null);
+					setParentLink(l1, n1);
+				chainNode(n2, n1);
+					setParentLink(l2, n2);
+
+				n1.new = false;
+				n2.new = false;
+
+				l1.new = false;
+				l2.new = false;
+
+				done();
+			});
+
+			it('Apply [1, 3] to a single Leaf whose BT is [0]', function(done) {
+				const selections = [
+					{ leaf: l1, range: [l1.text.length, l1.text.length] },
+					{ leaf: l1, range: [l1.text.length, l1.text.length] }
+				];
+				const newBT = [1, 3];
+				applyBranchType(selections, newBT);
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(1);
+				expect(cn.new).to.be.true;
+				cn.new = false;
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+					expect(cn.new).to.be.true;
+					cn.new = false;
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+						expect(cl.nextLeaf).to.equal(null);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn).to.equal(n2);
+
+				done();
+			});
+
+			it('Undo', function(done) {
+				// Undo
+				readyTempHistorySteps();
+				undo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn).to.equal(n1);
+					let cl = cn.firstChild;
+					expect(cl).to.equal(l1);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n2);
+
+				done();
+			});
+
+			it('Redo', function(done) {
+				// Redo
+				readyTempHistorySteps();
+				redo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(1);
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+						expect(cl.nextLeaf).to.equal(null);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn).to.equal(n2);
+
+				done();
+			});
+
+		});
+
+		describe('Apply BT to the first Leaf in a branch whose length is greater than 1', function() {
+			const l1 = new Leaf({ text: 'l1' });
+			const l2 = new Leaf({ text: 'l2' });
+
+			const n1 = new Node({ nodeType: 1 });
+			const n2 = new Node({ nodeType: 3 });
+			const n3 = new Node({ nodeType: 3 });
+
+			/*
+				(1)---(3)---<l1>
+		        	  |
+		        	  (3)---<l2>
+		    */
+		    before(function(done) {
+				DocumentRoot.firstChild = null;
+				History.clear(_PAST_STACK_);
+				History.clear(_FUTURE_STACK_);
+				TempHistoryPastStep.clear();
+				TempHistoryFutureStep.clear();
+				
+				setParentLink(n1, null);
+					setParentLink(n2, n1);
+						setParentLink(l1, n2);
+					chainNode(n3, n2);
+						setParentLink(l2, n3);
+
+				n1.new = false;
+				n2.new = false;
+				n3.new = false;
+
+				l1.new = false;
+				l2.new = false;
+
+				done();
+			});
+
+			it('Apply [2, 3] to the first Leaf whose BT is [1, 3]', function(done) {
+				const selections = [
+					{ leaf: l1, range: [l1.text.length, l1.text.length] },
+					{ leaf: l1, range: [l1.text.length, l1.text.length] }
+				];
+				const newBT = [2, 3];
+				applyBranchType(selections, newBT);
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(2);
+				expect(cn.new).to.be.true;
+				cn.new = false;
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+					expect(cn.new).to.be.true;
+					cn.new = false;
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+						expect(cl.nextLeaf).to.equal(null);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn).to.equal(n1);
+					cn = cn.firstChild;
+					expect(cn).to.equal(n3);
+
+				done();
+			});
+
+			it('Undo', function(done) {
+				// Undo
+				readyTempHistorySteps();
+				undo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn).to.equal(n1);
+					cn = cn.firstChild;
+					expect(cn).to.equal(n2);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+					cn = cn.nextNode;
+					expect(cn).to.equal(n3);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Redo', function(done) {
+				// Redo
+				readyTempHistorySteps();
+				redo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(2);
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+						expect(cl.nextLeaf).to.equal(null);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn).to.equal(n1);
+					cn = cn.firstChild;
+					expect(cn).to.equal(n3);
+
+				done();
+			});
+
+		});
+
+		describe('Apply BT to the last Leaf in a branch whose length is greater than 1', function() {
+			const l1 = new Leaf({ text: 'l1' });
+			const l2 = new Leaf({ text: 'l2' });
+
+			const n1 = new Node({ nodeType: 1 });
+			const n2 = new Node({ nodeType: 3 });
+			const n3 = new Node({ nodeType: 3 });
+
+			/*
+				(1)---(3)---<l1>
+		        	  |
+		        	  (3)---<l2>
+		    */
+		    before(function(done) {
+				DocumentRoot.firstChild = null;
+				History.clear(_PAST_STACK_);
+				History.clear(_FUTURE_STACK_);
+				TempHistoryPastStep.clear();
+				TempHistoryFutureStep.clear();
+				
+				setParentLink(n1, null);
+					setParentLink(n2, n1);
+						setParentLink(l1, n2);
+					chainNode(n3, n2);
+						setParentLink(l2, n3);
+
+				n1.new = false;
+				n2.new = false;
+				n3.new = false;
+
+				l1.new = false;
+				l2.new = false;
+
+				done();
+			});
+
+			it('Apply [2, 3] to the last Leaf whose BT is [1, 3]', function(done) {
+				const selections = [
+					{ leaf: l2, range: [l2.text.length, l2.text.length] },
+					{ leaf: l2, range: [l2.text.length, l2.text.length] }
+				];
+				const newBT = [2, 3];
+				applyBranchType(selections, newBT);
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn).to.equal(n1);
+					cn = cn.firstChild;
+					expect(cn).to.equal(n2);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn.nodeType).to.equal(2);
+				expect(cn.new).to.be.true;
+				cn.new = false;
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+					expect(cn.new).to.be.true;
+					cn.new = false;
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l2);
+						expect(cl.nextLeaf).to.equal(null);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Undo', function(done) {
+				// Undo
+				readyTempHistorySteps();
+				undo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn).to.equal(n1);
+					cn = cn.firstChild;
+					expect(cn).to.equal(n2);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+					cn = cn.nextNode;
+					expect(cn).to.equal(n3);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Redo', function(done) {
+				// Redo
+				readyTempHistorySteps();
+				redo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn).to.equal(n1);
+					cn = cn.firstChild;
+					expect(cn).to.equal(n2);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn.nodeType).to.equal(2);
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l2);
+						expect(cl.nextLeaf).to.equal(null);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+		});
+
+		describe('Apply BT to all Leaves in a branch whose length is greater than 1', function() {
+			const l1 = new Leaf({ text: 'l1' });
+			const l2 = new Leaf({ text: 'l2' });
+
+			const n1 = new Node({ nodeType: 1 });
+			const n2 = new Node({ nodeType: 3 });
+			const n3 = new Node({ nodeType: 3 });
+
+			/*
+				(1)---(3)---<l1>
+		        	  |
+		        	  (3)---<l2>
+		    */
+		    before(function(done) {
+				DocumentRoot.firstChild = null;
+				History.clear(_PAST_STACK_);
+				History.clear(_FUTURE_STACK_);
+				TempHistoryPastStep.clear();
+				TempHistoryFutureStep.clear();
+				
+				setParentLink(n1, null);
+					setParentLink(n2, n1);
+						setParentLink(l1, n2);
+					chainNode(n3, n2);
+						setParentLink(l2, n3);
+
+				n1.new = false;
+				n2.new = false;
+				n3.new = false;
+
+				l1.new = false;
+				l2.new = false;
+
+				done();
+			});
+
+			it('Apply [2, 3] to all Leaves whose BT is [1, 3]', function(done) {
+				const selections = [
+					{ leaf: l1, range: [l1.text.length, l1.text.length] },
+					{ leaf: l2, range: [l2.text.length, l2.text.length] }
+				];
+				const newBT = [2, 3];
+				applyBranchType(selections, newBT);
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(2);
+				expect(cn.new).to.be.true;
+				cn.new = false;
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+					expect(cn.new).to.be.true;
+					cn.new = false;
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+						expect(cl.nextLeaf).to.equal(null);
+					cn = cn.nextNode;
+					expect(cn).to.equal(n3);
+					expect(cn.nextNode).to.equal(null);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Undo', function(done) {
+				// Undo
+				readyTempHistorySteps();
+				undo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn).to.equal(n1);
+					cn = cn.firstChild;
+					expect(cn).to.equal(n2);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+					cn = cn.nextNode;
+					expect(cn).to.equal(n3);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Redo', function(done) {
+				// Redo
+				readyTempHistorySteps();
+				redo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(2);
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+						expect(cl.nextLeaf).to.equal(null);
+					cn = cn.nextNode;
+					expect(cn).to.equal(n3);
+					expect(cn.nextNode).to.equal(null);
+				cn = cn.parent;
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+		});
+
+		describe('Apply length-1 BT to length-2 BT with a length-1 BT after them', function() {
+			const l1 = new Leaf({ text: 'l1' });
+			const l2 = new Leaf({ text: 'l2' });
+			const l3 = new Leaf({ text: 'l2' });
+
+			const n1 = new Node({ nodeType: 1 });
+			const n2 = new Node({ nodeType: 3 });
+			const n3 = new Node({ nodeType: 3 });
+			const n4 = new Node({ nodeType: 0 });
+
+			/*
+				(1)---(3)---<l1>
+		        |	  |
+		        |	  (3)---<l2>
+		        |
+		        (0)---<l3>
+		    */
+		    before(function(done) {
+				DocumentRoot.firstChild = null;
+				History.clear(_PAST_STACK_);
+				History.clear(_FUTURE_STACK_);
+				TempHistoryPastStep.clear();
+				TempHistoryFutureStep.clear();
+				
+				setParentLink(n1, null);
+					setParentLink(n2, n1);
+						setParentLink(l1, n2);
+					chainNode(n3, n2);
+						setParentLink(l2, n3);
+				chainNode(n4, n1);
+					setParentLink(l3, n4);
+
+				n1.new = false;
+				n2.new = false;
+				n3.new = false;
+				n4.new = false;
+
+				l1.new = false;
+				l2.new = false;
+				l3.new = false;
+
+				done();
+			});
+
+			it('Apply [0] to all Leaves whose BT is [1, 3], after which there is a [0] Leaf.', function(done) {
+				const selections = [
+					{ leaf: l1, range: [l1.text.length, l1.text.length] },
+					{ leaf: l2, range: [l2.text.length, l2.text.length] }
+				];
+				const newBT = [0];
+				applyBranchType(selections, newBT);
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(0);
+				expect(cn.new).to.be.true;
+				cn.new = false;
+					let cl = cn.firstChild;
+					expect(cl).to.equal(l1);
+					expect(cl.nextLeaf).to.equal(null);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n3);
+				expect(cn.nodeType).to.equal(0);
+					cl = cn.firstChild;
+					expect(cl).to.equal(l2);
+					expect(cl.nextLeaf).to.equal(null);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n4);
+
+				done();
+			});
+
+			it('Undo', function(done) {
+				// Undo
+				readyTempHistorySteps();
+				undo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn).to.equal(n1);
+					cn = cn.firstChild;
+					expect(cn).to.equal(n2);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+					cn = cn.nextNode;
+					expect(cn).to.equal(n3);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn).to.equal(n4);
+
+				done();
+			});
+
+			it('Redo', function(done) {
+				// Redo
+				readyTempHistorySteps();
+				redo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(0);
+					let cl = cn.firstChild;
+					expect(cl).to.equal(l1);
+					expect(cl.nextLeaf).to.equal(null);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n3);
+				expect(cn.nodeType).to.equal(0);
+					cl = cn.firstChild;
+					expect(cl).to.equal(l2);
+					expect(cl.nextLeaf).to.equal(null);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n4);
+
+				done();
+			});
+
+		});
+
+		describe('Strange case 1 (Rechain PC in unchained NC)', function() {
+
+			const l1 = new Leaf({ text: 'l1' });
+			const l2 = new Leaf({ text: 'l2' });
+			const l3 = new Leaf({ text: 'l3' });
+
+			const n1 = new Node({ nodeType: 0 });
+			const n2 = new Node({ nodeType: 0 });
+			const n3 = new Node({ nodeType: 0 });
+
+			let n4;
+			let n5;
+			let n6;
+
+			/*
+				(0)---<l1>
+		        |
+		        (0)---<l2>
+		        |
+		        (0)---<l3>
+		    */
+		    before(function(done) {
+				DocumentRoot.firstChild = null;
+				History.clear(_PAST_STACK_);
+				History.clear(_FUTURE_STACK_);
+				TempHistoryPastStep.clear();
+				TempHistoryFutureStep.clear();
+				
+				setParentLink(n1, null);
+					setParentLink(l1, n1);
+				chainNode(n2, n1);
+					setParentLink(l2, n2);
+				chainNode(n3, n2);
+					setParentNode(l3, n3);
+
+				n1.new = false;
+				n2.new = false;
+				n3.new = false;
+
+				l1.new = false;
+				l2.new = false;
+				l3.new = false;
+
+				done();
+			});
+
+			it('Apply [1, 3] to l1 and l2', function(done) {
+				const selections = [
+					{ leaf: l1, range: [l1.text.length, l1.text.length] },
+					{ leaf: l2, range: [l2.text.length, l2.text.length] }
+				];
+				const newBT = [1, 3];
+				applyBranchType(selections, newBT);
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(1);
+				expect(cn.new).to.be.true;
+				cn.new = false;
+				n4 = cn;
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+					expect(cn.new).to.be.true;
+					cn.new = false;
+					n5 = cn;
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+					cn = cn.nextNode;
+					expect(cn).to.equal(n2);
+					expect(cn.nodeType).to.equal(3);
+					expect(cn.nextNode).to.equal(null);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn).to.equal(n3);
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Apply [0] to l1 and l2', function(done) {
+				readyTempHistorySteps();
+
+				const selections = [
+					{ leaf: l1, range: [l1.text.length, l1.text.length] },
+					{ leaf: l2, range: [l2.text.length, l2.text.length] }
+				];
+				const newBT = [0];
+				applyBranchType(selections, newBT);
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(0);
+				expect(cn.new).to.be.true;
+				cn.new = false;
+				n6 = cn;
+					let cl = cn.firstChild;
+					expect(cl).to.equal(l1);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n2);
+				expect(cn.nodeType).to.equal(0);
+					cl = cn.firstChild;
+					expect(cl).to.equal(l2);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n3);
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Undo', function(done) {
+				// Undo
+				readyTempHistorySteps();
+				undo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(1);
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+					cn = cn.nextNode;
+					expect(cn).to.equal(n2);
+					expect(cn.nodeType).to.equal(3);
+					expect(cn.nextNode).to.equal(null);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn).to.equal(n3);
+				expect(cn.nextNode).to.equal(null);
+				expect(cn.prevNode).to.equal(n4);
+
+				done();
+			});
+
+			it('Undo again', function(done) {
+				// Undo
+				readyTempHistorySteps();
+				undo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn).to.equal(n1);
+					let cl = cn.firstChild;
+					expect(cl).to.equal(l1);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n2);
+				expect(cn.nodeType).to.equal(0);
+					cl = cn.firstChild;
+					expect(cl).to.equal(l2);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n3);
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Redo', function(done) {
+				// Redo
+				readyTempHistorySteps();
+				redo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(1);
+					cn = cn.firstChild;
+					expect(cn.nodeType).to.equal(3);
+						let cl = cn.firstChild;
+						expect(cl).to.equal(l1);
+					cn = cn.nextNode;
+					expect(cn).to.equal(n2);
+					expect(cn.nodeType).to.equal(3);
+					expect(cn.nextNode).to.equal(null);
+				cn = cn.parent;
+				cn = cn.nextNode;
+				expect(cn).to.equal(n3);
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+			it('Redo again', function(done) {
+				// Redo
+				readyTempHistorySteps();
+				redo();
+
+				let cn = DocumentRoot.firstChild;
+				expect(cn.nodeType).to.equal(0);
+					let cl = cn.firstChild;
+					expect(cl).to.equal(l1);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n2);
+				expect(cn.nodeType).to.equal(0);
+					cl = cn.firstChild;
+					expect(cl).to.equal(l2);
+				cn = cn.nextNode;
+				expect(cn).to.equal(n3);
+				expect(cn.nextNode).to.equal(null);
+
+				done();
+			});
+
+		});
+
 	});
 
 	describe('applyNodeStyle & applyNodesStyle', function() {

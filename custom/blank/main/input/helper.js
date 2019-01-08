@@ -1,22 +1,27 @@
 // @flow
-/* eslint camelcase: 0 */
-import { BlankContexts, KeyTypes, KeyModifiers, BlankIntents } from './utils';
+/*
+	This file contains functions that handle certain input for a context. They will
+	return either an intent or an empty string, which will be dispatched by the
+	IntentDispatcher.
+
+	Their naming convention is {CONTEXT}${anyName}.
+*/
+import { KeyTypes, KeyModifiers, BlankIntents } from './utils';
 import Keyboard from './keyboard';
-import Mouse from './mouse';
 
 import { BeforeActionSelection, isZeroWidth } from '../selection';
 import { NodeTypes } from '../node';
 import { isZeroLeaf } from '../leaf';
 
 const { CHARACTER } = KeyTypes;
-const { SHIFT, CTRL, ALT, META } = KeyModifiers;
-const { NO_CONTEXT, COMPOSITION } = BlankContexts;
+const { SHIFT, CTRL } = KeyModifiers;
 const { LIST_ITEM } = NodeTypes;
 
 // Intents
+/* eslint camelcase: 0 */
 const {
+	_default,
 	insert_char,
-	replace_text,
 	del,
 	backspace,
 	newline,
@@ -25,99 +30,23 @@ const {
 	copy,
 	cut,
 	paste,
-	paste_content,
 	bold,
 	italic,
 	underline,
+	select_all,
 	indent_list_item,
 	unindent_list_item,
 	cut_list
 } = BlankIntents;
 
-const defaultHandler = () => '';
-export class InputProcessor {
-	/*
-		Each InputProcessor cooresponds to a Context. It processes user input (Keyboard
-		& Mouse) and returns an intent which performs a Complete Action.
-
-		Conditions for each intent must be exclusive.
-	*/
-
-	/*
-		@ attributes
-		core: function - default: () => '';
-	*/
-	core: (string) => string;
-
-	/*
-		@ methods
-		register
-		getIntent
-	*/
-
-	/*
-		constructor
-	*/
-	constructor() {
-		this.core = defaultHandler;
-	}
-
-	/*
-		register:
-			- Register a function that returns an intent's name, based on current user
-			  input.
-		@ params
-			fn: function
-	*/
-	register(fn: (string) => string): void {
-		this.core = fn;
-	}
-
-	/*
-		getIntent:
-			- Run the registered function and get the intent's name, based on current
-			  user input or command.
-			  	- Command takes priority over user input.
-		@ params
-			command: string
-		@ return
-			intent: string
-	*/
-	getIntent(command: string = ''): string {
-		return this.core(command);
-	}
-}
-
-//= Declare InputProcessor for each Context here
-
-const ContextProcessors: Object = {
-	// NO_CONTEXT
-	[NO_CONTEXT]: new InputProcessor(),
-	// COMPOSITION
-	[COMPOSITION]: new InputProcessor()
-};
-
-//= Register input handler for each InputProcessor here
-
-// NO_CONTEXT - empty
-
-// COMPOSITION
-ContextProcessors.COMPOSITION.register((command: string = '') => {
-	// Command has priority over user input
-	// If no intent is found for the command, return ''
-	if (command) {
-		switch (command) {
-			case 'replace_text': {
-				return replace_text;
-			}
-			case 'paste_content': {
-				return paste_content;
-			}
-			default: {
-				return '';
-			}
-		}
-	}
+//= COMPOSITION
+/*
+	keydown for COMPOSITION:
+		- Return an intent given the current Keyboard state.
+	@ return
+		intent: string
+*/
+export function COMPOSITION$keydown(): string {
 	// Basic
 	// Insert a character
 	if (Keyboard.pressed(CHARACTER) || Keyboard.pressed(CHARACTER, SHIFT)) {
@@ -153,7 +82,7 @@ ContextProcessors.COMPOSITION.register((command: string = '') => {
 	}
 	// Paste
 	if (Keyboard.pressed('KeyV', CTRL)) {
-		return paste;
+		return _default;
 	}
 	// Bold
 	if (Keyboard.pressed('KeyB', CTRL)) {
@@ -166,6 +95,16 @@ ContextProcessors.COMPOSITION.register((command: string = '') => {
 	// Underline
 	if (Keyboard.pressed('KeyU', CTRL)) {
 		return underline;
+	}
+	// Select All
+	if (Keyboard.pressed('KeyA', CTRL)) {
+		return _default;
+	}
+
+	// Arrow Keys
+	if (Keyboard.pressed('ArrowUp') || Keyboard.pressed('ArrowDown') ||
+		Keyboard.pressed('ArrowLeft') || Keyboard.pressed('ArrowRight')) {
+		return _default;
 	}
 
 	// Advanced (More conditions than just keyboard & mouse)
@@ -192,6 +131,11 @@ ContextProcessors.COMPOSITION.register((command: string = '') => {
 	}
 
 	return '';
-});
-
-export { ContextProcessors };
+}
+/*
+	click for COMPOSITION:
+		- Handle button clicking that modifies, for example, BranchType.
+*/
+export function COMPOSITION$click() {
+	// TODO
+}

@@ -1,6 +1,6 @@
 // @flow
 import { BlankContexts } from './utils';
-import { type InputProcessor, ContextProcessors } from './processor';
+import ContextHandlers from './handler';
 
 /*
 	When using a Blank Editor, user input always has a context. For example, user can
@@ -23,12 +23,15 @@ import { type InputProcessor, ContextProcessors } from './processor';
 	Sometimes, it may feel like a context exists within another context, but to make
 	things simpler, treat them as parallel.
 
+	Each context has their own event handlers. For exmaple, some contexts may handle
+	"click" event while others do not.
+
 	Lifecycle:
 
-	Event (Keyboard & Mouse) -> Context -> Input Processor -> Intent -> Action
+	Event -> Context -> Handler -> Intent -> Action
 */
 
-const { NO_CONTEXT } = BlankContexts;
+const { NO_CONTEXT, COMPOSITION } = BlankContexts;
 
 let BlankContextExists = false;
 class BlankContext {
@@ -44,11 +47,14 @@ class BlankContext {
 
 	/*
 		@ attributes
+		context: string
 	*/
 	context: string;
 
 	/*
 		@ methods
+		handleEvent
+		init
 	*/
 
 	/*
@@ -63,8 +69,23 @@ class BlankContext {
 		this.context = NO_CONTEXT;
 	}
 
-	getProcessor(): InputProcessor {
-		return ContextProcessors[this.context];
+	/*
+		getHandler:
+			- Return the EventHandler for the current context.
+	*/
+	handleEvent(
+		eventName: string,
+		event: KeyboardEvent | MouseEvent | ClipboardEvent | Event
+	): void {
+		ContextHandlers[this.context](eventName, event);
+	}
+
+	/*
+		init:
+			- Set context to COMPOSITION.
+	*/
+	init(): void {
+		this.context = COMPOSITION;
 	}
 }
 

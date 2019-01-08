@@ -8,13 +8,19 @@
 }
 
 .blank-editor {
+	min-height: 100%;
+	max-width: 800px;
+	margin: auto;
+	padding: 50px 0;
 	outline: none;
 	white-space: pre-wrap;
 	overflow-wrap: break-word;
 	-webkit-user-modify: read-write-plaintext-only;
+	background-color: white;
 }
 
 .blank-container {
 	font-size: 18px;
 	line-height: 1.6em;
+	font-family: Cambria, Georgia, serif;
 }
