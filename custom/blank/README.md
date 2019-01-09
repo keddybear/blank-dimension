@@ -16,3 +16,5 @@ Here is the performance benchmarking with some popular rich text editors: slate.
 #### Paste huge document, undo and redo
 
 *slate.js*
+
+[benchmark-paste-slate](img/benchmark-paste-slate.jpg)
