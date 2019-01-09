@@ -4,7 +4,7 @@ Blank.js is the rich text editor for Blank Dimension. It's designed to write nov
 [Demo](https://blankjs.herokuapp.com/)
 
 ## Performance
-Here is the performance benchmarking with some popular rich text editors: slate.js, Google Doc, and reddit's rich text comment editor. **Google Doc has much more features than Blank.js, so comparison here is just to see if my editor, which has less features, is definitely faster.**
+Here is the performance benchmarking with some popular rich text editors: slate.js, Google Doc, and reddit's rich text comment editor. **Google Doc has much more features than Blank.js, so the comparison here is just to see if my editor is definitely faster.**
 
 **Scenarios:**
 1. Paste huge document, undo and redo.
@@ -14,3 +14,5 @@ Here is the performance benchmarking with some popular rich text editors: slate.
 **Material:** huge document (900 paragraphs) from [https://www.slatejs.org/#/huge-document](https://www.slatejs.org/#/huge-document)
 
 #### Paste huge document, undo and redo
+
+*slate.js*
