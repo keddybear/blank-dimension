@@ -6,6 +6,14 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 8000;
 
+app.get('*.js', (req, res, next) => {
+	req.url = `${req.url}.gz`;
+	res.set('Content-Encoding', 'gzip');
+	next();
+});
+
+app.use(express.static('dist'));
+
 app.get('/*', (req, res) => {
 	res.sendFile(path.resolve('dist/index.html'), (err) => {
 		if (err) {
