@@ -15,50 +15,9 @@ Here is the performance benchmarking with some popular rich text editors: slate.
 
 ### Paste huge document, undo and redo
 
-**_slate.js_**
-
-Paste: **22410.2 ms** = 22320.7 ms + 86.4 ms + 3.1 ms
-
-Undo: **2347.2 ms** = 2344.6 ms + 2.0 ms + 0.6 ms
-
-Redo: **13628.7 ms** = 13490.4 ms + 135.9 ms + 2.4 ms
-
-![benchmark-paste-slate](img/benchmark-paste-slate.jpg)
-
-***
-
-**_Google Doc_**
-
-Paste: **8138.5 ms** = 4935.6 ms + 3195.8 ms + 7.1 ms
-
-Undo: **2337.7 ms** = 2392.2 ms + 39.9 ms + 2.6 ms
-
-Redo: **2273.8 ms** = 2149.6 ms + 113.9 ms + 10.3 ms
-
-![benchmark-paste-google_doc](img/benchmark-paste-google_doc.jpg)
-
-***
-
-**_Reddit_**
-
-Paste: **1849.7 ms** = 1671.9 ms + 173.3 ms + 4.5 ms
-
-Undo: **23.3 ms** = 14.7 ms + 4.9 ms + 3.7 ms
-
-Redo: **391.1 ms** = 253.2 ms + 134.6 ms + 3.3 ms
-
-![benchmark-paste-reddit](img/benchmark-paste-reddit.jpg)
-
-***
-
-**_Blank.js_**
-
-Paste: **248.2 ms** = 151.9 ms + 94.3 ms + 2.0 ms
-
-Undo: **31.0 ms** = 29.2 ms + 1.6 ms + 0.2 ms
-
-Redo: **182.9 ms** = 108.3 ms + 73.4 ms + 1.9 ms
-
-![benchmark-paste-blank](img/benchmark-paste-blank.jpg)
-
-***
+|               | Paste           | Undo      | Redo     | Screenshots |
+| ------------- | --------------- | --------- | -------- | ----------- |
+| **_slate.js_** | 22410.2 ms | 2347.2 ms | 13628.7 ms | [Link](img/benchmark-paste-slate.jpg) |
+| **_Google Doc_** | 8138.5 ms | 2337.7 ms | 2273.8 ms | [Link](img/benchmark-paste-google_doc.jpg) |
+| **_Reddit_** | 1849.7 ms | 23.3 ms | 391.1 ms | [Link](img/benchmark-paste-reddit.jpg) |
+| **_Blank.js_** | 248.2 ms | 31.0 ms | 182.9 ms | [Link](img/benchmark-paste-blank.jpg) |
