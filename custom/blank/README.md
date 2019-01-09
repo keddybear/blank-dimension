@@ -2,6 +2,7 @@
 blank.js is the rich text editor for Blank Dimension. It's designed to write novels and allow authors to create their own custom formats, so its internal model must be flexible and it must be able to handle huge document efficiently.
 
 Below is the performance benchmarking with some popular rich text editors: slate.js, Google Doc, and reddit's rich text comment editor.
+
 **Disclaimer:** Google Doc has much more features than blank.js, so the purpose of comparison is to see if my editor is definitely faster.
 
 **Scenarios:**
