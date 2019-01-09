@@ -17,4 +17,16 @@ Here is the performance benchmarking with some popular rich text editors: slate.
 
 *slate.js*
 
-[benchmark-paste-slate](img/benchmark-paste-slate.jpg)
+![benchmark-paste-slate](img/benchmark-paste-slate.jpg)
+
+*Google Doc*
+
+![benchmark-paste-google_doc](img/benchmark-paste-google_doc.jpg)
+
+*Reddit*
+
+![benchmark-paste-google_doc](img/benchmark-paste-reddit.jpg)
+
+*Blank.js*
+
+![benchmark-paste-google_doc](img/benchmark-paste-blank.jpg)
