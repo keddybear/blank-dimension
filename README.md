@@ -1,9 +1,10 @@
 # Blank Dimension [![Status](https://travis-ci.com/keddybear/blank-dimension.svg?branch=master)](https://travis-ci.com/keddybear/blank-dimension)  
-A project using React & Redux to create a custom rich text editor for my science fiction and turn it into an interactive web app.
+Blank Dimension is a personal project to turn my science fiction into a dynamic novel.
 
-The goal is to have absolute control over formatting and give readers the most immersive reading experience.
+### Modules
+1. [blank.js](https://github.com/keddybear/blank-dimension/tree/master/custom/blank)
 
-Planned features include dynamic updates on character sheets and background information as readers progress through the story, a world map showing characters' current locations, toggleable inner thoughts, and of course illustrations.
+blank.js is the rich text editor for Blank Dimension. It's designed to write novels and allow authors to create their own cutom formats.
 
 # License
 None
