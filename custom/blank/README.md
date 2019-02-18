@@ -1,5 +1,5 @@
 # Blank.js
-Blank.js is a WYSIWYG (what you see is what you get) rich text editor. In handling huge documents, it's faster than Google Doc, Reddit's Fancy Pants Editor, and Slate.js.
+Blank.js is a WYSIWYG rich text editor. In handling huge documents, it's faster than Google Doc, Reddit's Fancy Pants Editor, and Slate.js.
 
 Check out a [live demo](https://blankjs.herokuapp.com/) here!
 
