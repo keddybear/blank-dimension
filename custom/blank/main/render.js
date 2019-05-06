@@ -96,11 +96,13 @@
 	LeafChain: DIRTY_CHILDREN -> LeafChain's startLeaf's parent
 	LeafText: DIRTY_SELF -> Leaf
 
-	In unchain(), mark target Blank Element as dirty, and push it into RenderStack, which
-	uses HashSet to store dirty Blank Elements in order.
+	In unchain(), mark target Blank Element as dirty, and push it into RenderStack. If its
+	renderPos is not null, it means it's already in stack. Move it to the end by push and
+	delete at its renderPos, unless it's already at the end. Update renderPos. (RenderStack
+	will have "undefined" value, but much faster than using splice.)
 
 	After an Action is complete, start rendering everything in RenderStack.
-		- Iterate through each Blank Element using forEach().
+		- Pop Blank Element, and set its renderPos to null.
 		- Get its React component through ReactMap.
 		- If component exists:
 			- If DIRTY_SELF or DIRTY, call setState({ update: true }).
@@ -188,35 +190,41 @@ let RenderStackExists = false;
 class BlankRenderQueue {
 	/*
 		BlankRenderQueue is used to queue up Blank Element whose Blank Component needs to be
-		rendered. Nodes and Leaves in the queue will have their dirty property updated.
+		rendered. Nodes and Leaves in the queue will have their renderPos and dirty updated.
 
 		If a Node or Leaf is already in queue, pushing it will move it to the end of the
-		queue. This is accomplished by using HashSet.
+		queue.
+
+		BlankRenderQueue's clear() method only clears the stack when there are only undefined
+		values left, because it needs to set all elements' renderPos to null. render() should
+		clear the queue.
 
 		A low priority queue stores Blank Elements that are DIRTY_SELF. Its elements will be
 		popped after the main queue is emptied.
 
 		If a Blank Element is changed from DIRTY_SELF to DIRTY, it will be moved from the
-		low priority to the main queue.
+		low priority to the main queue. Its original position will be replaced by undefined.
 	*/
 
 	/*
 		@ attributes
-		set: Set<Node | RootNode | Leaf>
-		setLow: Set<Node | RootNode | Leaf>
+		queue: Array<Node | RootNode | Leaf>
+		queueLow: Array<Node | RootNode | Leaf>
+		realMainSize: number
+		realLowSize: number
+		realSize: number
 	*/
-	set: Set<?Node | ?RootNode | ?Leaf>;
-	setLow: Set<?Node | ?RootNode | ?Leaf>;
+	queue: Array<?Node | ?RootNode | ?Leaf>;
+	queueLow: Array<?Node | ?RootNode | ?Leaf>;
 	realSize: { high: number, low: number };
 
 	/*
 		@ methods
 		push
-		forEach
+		pop
+		length
 		size
 		clear
-	*/
-
 	/*
 		constructor
 	*/
@@ -226,79 +234,121 @@ class BlankRenderQueue {
 		}
 		RenderStackExists = true;
 
-		this.set = new Set();
-		this.setLow = new Set();
+		this.queue = [];
+		this.queueLow = [];
+		this.realSize = { high: 0, low: 0 };
 	}
 
 	/*
 		push:
-			- Add a Node or Leaf into the queue.
-			- If the Node or Leaf already exists in the queue, delete it and add it again.
-			- If DIRTY_SELF, add it to the low-priority queue. If DIRTY or DIRTY_CHILDREN,
-			  add it to the main queue.
-				- If DIRTY element exists in low-priority queue, delete it and move it to
-				  the main queue.
+			- Push a Node or Leaf into the queue, and update their renderPos.
+			- If the Node or Leaf's renderPos is not null, delete the element at RenderPos,
+			  push the Node or Leaf, and update their renderPos.
+				- Do nothing if the Node or Leaf is already at the end of the queue.
+			- If DIRTY_SELF, push it into the low queue. If DIRTY or DIRTY_CHILDREN, push
+			  it in the main queue.
+				- If DIRTY element exists in low queue, move it to the main queue and
+				  replace its original position with undefined.
 		@ params
 			el: Node | Leaf
 	*/
 	push(el: Node | Leaf | RootNode): void {
-		// Check if el already exists in a queue
+		let q = this.queue;
+		let oq = this.queueLow;
+		let qc = 'high';
+		let oqc = 'low';
 		if (el.dirty === RenderFlags.DIRTY_SELF) {
-			// Since element is DIRTY_SELF, add it to the low-priority queue.
-			// We assume DIRTY cannot be changed to DIRTY_SELF, so we don't check if the
-			// element exists in the main queue.
-			// If it exists in the low-priority queue, delete it.
-			if (this.setLow.has(el)) this.setLow.delete(el);
-			// Add the element
-			this.setLow.add(el);
-		} else {
-			// Check if the element exists in either the main queue or the low-priority
-			// queue. If it does, delete it.
-			if (this.set.has(el)) {
-				this.set.delete(el);
-			} else if (this.setLow.has(el)) {
-				this.setLow.delete(el);
+			q = this.queueLow;
+			oq = this.queue;
+			qc = 'low';
+			oqc = 'high';
+		}
+
+		// Check if el already exists in a queue
+		if (el.renderPos !== null) {
+			if (q.length === 0 || el.renderPos !== q.length - 1) {
+				// Check if el is in a different queue
+				if (q[el.renderPos] === el) {
+					q[el.renderPos] = undefined;
+				} else {
+					if (oq[el.renderPos] !== el) {
+						throw new Error('A Blank Element has renderPos but is not in any render queue.');
+					}
+					oq[el.renderPos] = undefined;
+					this.realSize[qc] += 1;
+					this.realSize[oqc] -= 1;
+				}
+				el.renderPos = q.length; // eslint-disable-line
+				// $FlowFixMe
+				q.push(el);
 			}
-			// Add the element
-			this.set.add(el);
+		} else {
+			el.renderPos = q.length; // eslint-disable-line
+			// $FlowFixMe
+			q.push(el);
+			this.realSize[qc] += 1;
 		}
 	}
 
 	/*
-		forEach:
-			- Take a function as argument to execute for each element.
-			- The function only takes the first argument (value1) of Set.prototype.forEach.
-		@ params
-			func: function
+		pop:
+			- Pop the next Node or Leaf, skipping undefined. And set their renderPos to
+			  null.
+			- Pop from the main queue, then the low priority queue.
+		@ return
+			el: Node | Leaf | RootNode | undefined
 	*/
-	forEach(func: (value: ?Node | ?RootNode | ?Leaf) => void): void {
-		// main queue
-		this.set.forEach((v) => {
-			func.call(this, v);
-		});
-		// low-priority queue
-		this.setLow.forEach((v) => {
-			func.call(this, v);
-		});
+	pop(): ?Node | ?Leaf | ?RootNode {
+		let el;
+		// Pop from the main queue first
+		while (!el && this.realSize.high > 0) {
+			el = this.queue.pop();
+			if (el !== undefined) {
+				this.realSize.high -= 1;
+			}
+		}
+		// Pop from the low priority queue
+		while (!el && this.realSize.low > 0) {
+			el = this.queueLow.pop();
+			if (el !== undefined) {
+				this.realSize.low -= 1;
+			}
+		}
+		// Reduce size counter by 1
+		if (el && typeof el === 'object' && el.renderPos !== undefined) {
+			el.renderPos = null;
+		}
+		return el;
+	}
+
+	/*
+		length:
+			- Get the length of the queue, including undefined values.
+		@ return
+			len: number
+	*/
+	length(): number {
+		return this.queue.length;
 	}
 
 	/*
 		size:
-			- Get the size of the render queue.
+			- Get the size of the queue, ignoring undefined values.
 		@ return
 			size: number
 	*/
 	size(): number {
-		return this.set.size + this.setLow.size;
+		return this.realSize.high + this.realSize.low;
 	}
 
 	/*
 		clear:
-			- Clear both the main queue and the low-priority queue.
+			- Clear the queue by setting its length to 0.
+			- Do nothing if there's still Blank Elements in the queue.
 	*/
 	clear(): void {
-		this.set.clear();
-		this.setLow.clear();
+		if (this.realSize.high === 0) this.queue.length = 0;
+		if (this.realSize.low === 0) this.queueLow.length = 0;
 	}
 }
 
@@ -660,8 +710,8 @@ export function render(): void {
 	// Ready ARM
 	AsyncRenderManager.clear();
 	// Iterate through RenderStack
-	RenderStack.forEach((element) => {
-		const el = element;
+	while (RenderStack.size() > 0) {
+		const el = RenderStack.pop();
 		// Check dirty
 		if (el) {
 			const comp = ReactMap.get(el);
@@ -708,8 +758,8 @@ export function render(): void {
 				}
 			}
 		}
-	});
-	// Cleanup
+	}
+	// Cleanup - remaining values are undefined
 	RenderStack.clear();
 	// Fire render callback just in case
 	AsyncRenderManager.fire();
