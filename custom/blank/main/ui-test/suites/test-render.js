@@ -145,6 +145,8 @@ const expecting = (el = null, comp = null, state) => {
 			expect(master.get(comp, 'render')).to.equal(0);
 		}
 		if (el) {
+			console.log(el);
+			console.log(ReactMap.has(el));
 			expect(ReactMap.has(el)).to.be.true;
 			if (instanceOf(el, 'Node')) {
 				expect(BlankMap.has(document.querySelector(`[data-node-key="${el.id}"]`))).to.be.true;
@@ -545,7 +547,7 @@ describe('Render', function() {
 	4. After rendering is done, set window selection and BAS from PAS.
 */
 
-	describe('BlankSelection with setWindowSelection()', function() {
+	describe.skip('BlankSelection with setWindowSelection()', function() {
 
 		describe('Selection is collapsed', function() {
 
@@ -982,7 +984,7 @@ describe('Render', function() {
 	Updated: Still in ReactMap and BlankMap, called shouldComponentUpdate() and render()
 */
 
-	describe('applyLeavesStyle', function(done) {
+	describe.skip('applyLeavesStyle', function(done) {
 
 		describe('Selection is in the same Leaf', function() {
 

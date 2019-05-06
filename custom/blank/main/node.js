@@ -143,7 +143,6 @@ export class Node {
 		new: Boolean - default true
 		Node: Boolean - default true
 		id: number
-		renderPos: number | null - default: null
 		dirty: number - default: 0
 	*/
 	styles: NodeStyles | null;
@@ -155,7 +154,6 @@ export class Node {
 	new: boolean;
 	Node: boolean;
 	id: number; // unique id
-	renderPos: number | null;
 	dirty: number;
 
 	/*
@@ -184,7 +182,6 @@ export class Node {
 		this.id = BlankCounter.get();
 
 		// Render attributes
-		this.renderPos = null;
 		this.dirty = 0;
 	}
 }
@@ -454,7 +451,7 @@ export class RootNode {
 
 		Nodes whose parents are RootNode have null as parent.
 
-		Its "container" stores the reference to the root HTMLElement for BlankEditor. (TODO)
+		Its "container" stores the reference to the root HTMLElement for BlankEditor.
 	*/
 
 	/*
@@ -463,14 +460,12 @@ export class RootNode {
 		new: boolean
 		container: HTMLElement | null
 		RootNode: Boolean
-		renderPos: number | null - default: null
 		dirty: number - default: 0
 	*/
 	firstChild: Node | null;
 	new: boolean;
 	container: HTMLElement | null;
 	RootNode: boolean;
-	renderPos: number | null;
 	dirty: number;
 
 	/*
@@ -488,7 +483,6 @@ export class RootNode {
 		this.RootNode = true;
 
 		// Render attributes
-		this.renderPos = null;
 		this.dirty = 0;
 	}
 }
